@@ -32,7 +32,7 @@ export async function DELETE(request) {
     }
 
     const client = await clientPromise;
-    const db = client.db("krispyskin");
+    const db = client.db("krispskin");
 
     const session = await db.collection("sessions").findOne({
       token: sessionToken
@@ -65,7 +65,6 @@ export async function DELETE(request) {
       );
     }
 
-    // Only the owner can delete the skin.
     const skin = await db.collection("skins").findOne({
       id: skinId,
       userId: user.id
@@ -81,13 +80,11 @@ export async function DELETE(request) {
       );
     }
 
-    // Delete the actual skin data.
     await db.collection("skins").deleteOne({
       id: skinId,
       userId: user.id
     });
 
-    // Remove it from the user's saved skin list.
     await db.collection("users").updateOne(
       {
         id: user.id
@@ -99,16 +96,15 @@ export async function DELETE(request) {
       }
     );
 
-    // Remove community posts belonging to this skin.
     await db.collection("posts").deleteMany({
       skinId,
       userId: user.id
     });
 
-    // If the deleted skin was active,
-    // select another saved skin if available.
+    let remainingSkin = null;
+
     if (user.skinId === skinId) {
-      const remainingSkin =
+      remainingSkin =
         await db.collection("skins").findOne(
           {
             userId: user.id
@@ -126,7 +122,8 @@ export async function DELETE(request) {
         },
         {
           $set: {
-            skinId: remainingSkin?.id || null,
+            skinId:
+              remainingSkin?.id || null,
             updatedAt: new Date()
           }
         }
@@ -147,7 +144,13 @@ export async function DELETE(request) {
     return NextResponse.json({
       success: true,
       deletedSkin: skinId,
-      message: "Skin deleted successfully"
+      activeSkin:
+        remainingSkin?.id ||
+        (user.skinId === skinId
+          ? null
+          : user.skinId),
+      message:
+        "Skin deleted successfully"
     });
   } catch (error) {
     console.error(
@@ -163,4 +166,4 @@ export async function DELETE(request) {
       { status: 500 }
     );
   }
-        }
+}
