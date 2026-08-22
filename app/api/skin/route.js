@@ -8,7 +8,10 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
 export async function POST(request) {
   try {
-    // Check login session
+    // ---------------------------------------------
+    // CHECK LOGIN SESSION
+    // ---------------------------------------------
+
     const sessionToken =
       request.cookies.get("krispyskin_session")?.value;
 
@@ -29,15 +32,23 @@ export async function POST(request) {
       token: sessionToken
     });
 
-    if (!session || new Date(session.expiresAt) <= new Date()) {
+    if (
+      !session ||
+      new Date(session.expiresAt) <= new Date()
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Your session has expired. Please login again."
+          error:
+            "Your session has expired. Please login again."
         },
         { status: 401 }
       );
     }
+
+    // ---------------------------------------------
+    // FIND USER
+    // ---------------------------------------------
 
     const user = await db.collection("users").findOne({
       id: session.userId
@@ -52,6 +63,10 @@ export async function POST(request) {
         { status: 401 }
       );
     }
+
+    // ---------------------------------------------
+    // READ FILE
+    // ---------------------------------------------
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -76,6 +91,10 @@ export async function POST(request) {
       );
     }
 
+    // ---------------------------------------------
+    // VALIDATE PNG
+    // ---------------------------------------------
+
     if (file.type !== "image/png") {
       return NextResponse.json(
         {
@@ -90,7 +109,8 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error: "File is too large. Maximum size is 2 MB."
+          error:
+            "File is too large. Maximum size is 2 MB."
         },
         { status: 413 }
       );
@@ -110,7 +130,10 @@ export async function POST(request) {
       0x0a
     ]);
 
-    if (!buffer.subarray(0, 8).equals(pngSignature)) {
+    if (
+      buffer.length < 8 ||
+      !buffer.subarray(0, 8).equals(pngSignature)
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -120,8 +143,16 @@ export async function POST(request) {
       );
     }
 
+    // ---------------------------------------------
+    // GENERATE SKIN ID
+    // ---------------------------------------------
+
     const skinId =
       `ks_${crypto.randomBytes(8).toString("hex")}`;
+
+    // ---------------------------------------------
+    // SAVE SKIN
+    // ---------------------------------------------
 
     await db.collection("skins").insertOne({
       id: skinId,
@@ -134,7 +165,12 @@ export async function POST(request) {
       createdAt: new Date()
     });
 
-    // Make this skin the user's active skin
+    // ---------------------------------------------
+    // ADD TO USER SKIN LIBRARY
+    //
+    // $addToSet = don't duplicate the same ID
+    // ---------------------------------------------
+
     await db.collection("users").updateOne(
       {
         id: user.id
@@ -143,15 +179,23 @@ export async function POST(request) {
         $set: {
           skinId: skinId,
           updatedAt: new Date()
+        },
+        $addToSet: {
+          skins: skinId
         }
       }
     );
+
+    // ---------------------------------------------
+    // RESPONSE
+    // ---------------------------------------------
 
     return NextResponse.json(
       {
         success: true,
         service: "KrispySkin",
         version: "0.1.0",
+
         skin: {
           id: skinId,
           filename: file.name,
@@ -159,7 +203,9 @@ export async function POST(request) {
           size: file.size,
           model: "classic"
         },
-        message: "Skin uploaded successfully"
+
+        message:
+          "Skin uploaded and added to your skin library"
       },
       { status: 201 }
     );
@@ -177,4 +223,4 @@ export async function POST(request) {
       { status: 500 }
     );
   }
-}
+},
