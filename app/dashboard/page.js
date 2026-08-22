@@ -1337,7 +1337,7 @@ export default function Dashboard() {
                   borderRadius:
                     "8px",
                   border:
-                    "1px solid #111",
+                    "1px solid #110",
                   background:
                     "#111",
                   color:
