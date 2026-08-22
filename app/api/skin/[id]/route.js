@@ -3,17 +3,20 @@ import clientPromise from "../../../../lib/mongodb";
 
 export const runtime = "nodejs";
 
-export async function GET(request, { params }) {
+export async function GET(
+  request,
+  { params }
+) {
   try {
     const { id } = await params;
 
     const client = await clientPromise;
     const db = client.db("krispyskin");
-    const skins = db.collection("skins");
 
-    const skin = await skins.findOne({
-      id
-    });
+    const skin =
+      await db.collection("skins").findOne({
+        id
+      });
 
     if (!skin) {
       return NextResponse.json(
@@ -25,22 +28,29 @@ export async function GET(request, { params }) {
       );
     }
 
-    const imageBuffer = Buffer.from(skin.data, "base64");
+    const buffer = Buffer.from(
+      skin.data,
+      "base64"
+    );
 
-    return new NextResponse(imageBuffer, {
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=31536000, immutable"
+        "Cache-Control":
+          "public, max-age=3600"
       }
     });
   } catch (error) {
-    console.error("KrispySkin skin fetch error:", error);
+    console.error(
+      "KrispySkin skin preview error:",
+      error
+    );
 
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to retrieve skin"
+        error: "Failed to load skin"
       },
       { status: 500 }
     );
