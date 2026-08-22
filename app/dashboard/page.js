@@ -10,9 +10,10 @@ export default function Dashboard() {
   const viewerRef = useRef(null);
 
   const [user, setUser] = useState(null);
+  const [viewerReady, setViewerReady] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [debug, setDebug] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [debug, setDebug] = useState([]);
 
   function log(message) {
     setDebug((old) => [
@@ -21,90 +22,136 @@ export default function Dashboard() {
     ]);
   }
 
+  // --------------------------------------------------
+  // Load user
+  // --------------------------------------------------
+
   useEffect(() => {
-    let destroyed = false;
-
-    async function initialize() {
+    async function loadUser() {
       try {
-        log("Starting dashboard...");
-
-        // Check login
         log("Checking KrispySkin session...");
 
-        const response = await fetch("/api/auth/me", {
-          cache: "no-store"
-        });
+        const response = await fetch(
+          "/api/auth/me",
+          {
+            cache: "no-store"
+          }
+        );
 
         const data = await response.json();
 
-        if (!response.ok || !data.authenticated) {
-          log("❌ User is not authenticated.");
+        if (
+          !response.ok ||
+          !data.authenticated
+        ) {
+          log(
+            "❌ User is not authenticated."
+          );
+
           router.replace("/login");
           return;
         }
 
-        if (destroyed) return;
-
         setUser(data.user);
 
-        log(`✓ Logged in as ${data.user.username}`);
+        log(
+          `✓ Logged in as ${data.user.username}`
+        );
 
         if (data.user.skinId) {
-          log(`✓ Skin ID: ${data.user.skinId}`);
+          log(
+            `✓ Skin ID: ${data.user.skinId}`
+          );
         } else {
-          log("⚠ No active skin.");
+          log(
+            "⚠ No active skin."
+          );
         }
-
-        // Wait until browser renders canvas
-        log("Waiting for canvas...");
-
-        await new Promise((resolve) =>
-          requestAnimationFrame(resolve)
+      } catch (error) {
+        log(
+          `❌ Session error: ${
+            error?.message ||
+            String(error)
+          }`
         );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadUser();
+  }, [router]);
+
+  // --------------------------------------------------
+  // Create 3D viewer AFTER canvas exists
+  // --------------------------------------------------
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) return;
+
+    if (!canvasRef.current) {
+      log(
+        "❌ Canvas still unavailable."
+      );
+      return;
+    }
+
+    let destroyed = false;
+
+    async function createViewer() {
+      try {
+        log(
+          "Loading skinview3d..."
+        );
+
+        const skinview3d =
+          await import(
+            "skinview3d"
+          );
 
         if (destroyed) return;
 
-        if (!canvasRef.current) {
-          throw new Error(
-            "Canvas element was not found."
-          );
-        }
-
-        log("✓ Canvas found.");
-
-        // Dynamically import skinview3d
-        log("Loading skinview3d...");
-
-        const skinview3d =
-          await import("skinview3d");
-
-        log("✓ skinview3d imported.");
+        log(
+          "✓ skinview3d imported."
+        );
 
         if (
-          !skinview3d ||
           !skinview3d.SkinViewer
         ) {
           throw new Error(
-            "SkinViewer class was not found in skinview3d."
+            "SkinViewer class not found."
           );
         }
 
-        log("✓ SkinViewer class found.");
+        log(
+          "✓ SkinViewer class found."
+        );
 
         const viewer =
           new skinview3d.SkinViewer({
-            canvas: canvasRef.current,
+            canvas:
+              canvasRef.current,
             width: 350,
             height: 500
           });
 
-        viewerRef.current = viewer;
+        viewerRef.current =
+          viewer;
 
-        log("✓ SkinViewer created.");
+        log(
+          "✓ SkinViewer created."
+        );
 
-        viewer.controls.enableRotate = true;
-        viewer.controls.enableZoom = true;
-        viewer.controls.enablePan = false;
+        viewer.controls.enableRotate =
+          true;
+
+        viewer.controls.enableZoom =
+          true;
+
+        viewer.controls.enablePan =
+          false;
 
         viewer.camera.position.set(
           0,
@@ -112,7 +159,9 @@ export default function Dashboard() {
           35
         );
 
-        log("✓ Camera configured.");
+        log(
+          "✓ Camera configured."
+        );
 
         if (
           skinview3d.WalkingAnimation
@@ -120,17 +169,18 @@ export default function Dashboard() {
           viewer.animation =
             new skinview3d.WalkingAnimation();
 
-          log("✓ Walking animation enabled.");
-        } else {
           log(
-            "⚠ WalkingAnimation unavailable."
+            "✓ Walking animation enabled."
           );
         }
 
-        if (data.user.skinId) {
+        setViewerReady(true);
+
+        // Load existing skin
+        if (user.skinId) {
           const skinUrl =
             `/api/skin/${encodeURIComponent(
-              data.user.skinId
+              user.skinId
             )}`;
 
           log(
@@ -141,38 +191,33 @@ export default function Dashboard() {
             skinUrl
           );
 
-          log("✓ Skin loaded successfully.");
+          if (!destroyed) {
+            log(
+              "✓ Skin loaded successfully."
+            );
+          }
         } else {
           log(
             "No skin to load."
           );
         }
       } catch (error) {
-        console.error(error);
-
         log(
-          `❌ ERROR: ${
+          `❌ 3D ERROR: ${
             error?.message ||
             String(error)
           }`
         );
 
-        if (
-          error?.stack
-        ) {
+        if (error?.stack) {
           log(
             `STACK: ${error.stack}`
           );
         }
-      } finally {
-        if (!destroyed) {
-          setLoading(false);
-          log("Dashboard initialization finished.");
-        }
       }
     }
 
-    initialize();
+    createViewer();
 
     return () => {
       destroyed = true;
@@ -182,10 +227,17 @@ export default function Dashboard() {
           viewerRef.current.dispose();
         } catch {}
 
-        viewerRef.current = null;
+        viewerRef.current =
+          null;
       }
+
+      setViewerReady(false);
     };
-  }, [router]);
+  }, [loading, user]);
+
+  // --------------------------------------------------
+  // Upload skin
+  // --------------------------------------------------
 
   async function uploadSkin(event) {
     const file =
@@ -193,10 +245,15 @@ export default function Dashboard() {
 
     if (!file) return;
 
-    if (file.type !== "image/png") {
-      alert(
-        "Only PNG files are allowed."
+    if (
+      file.type !==
+      "image/png"
+    ) {
+      log(
+        "❌ Only PNG files are allowed."
       );
+
+      event.target.value = "";
       return;
     }
 
@@ -204,25 +261,27 @@ export default function Dashboard() {
       file.size >
       2 * 1024 * 1024
     ) {
-      alert(
-        "Maximum file size is 2 MB."
+      log(
+        "❌ Maximum skin size is 2 MB."
       );
+
+      event.target.value = "";
       return;
     }
 
     setUploading(true);
 
     try {
+      log(
+        "Uploading new skin..."
+      );
+
       const formData =
         new FormData();
 
       formData.append(
         "file",
         file
-      );
-
-      log(
-        "Uploading new skin..."
       );
 
       const response =
@@ -244,18 +303,23 @@ export default function Dashboard() {
             "Unknown error"
           }`
         );
+
         return;
       }
 
+      const skinId =
+        data.skin.id;
+
       log(
-        `✓ Uploaded: ${data.skin.id}`
+        `✓ Uploaded: ${skinId}`
       );
 
-      setUser((old) => ({
-        ...old,
-        skinId: data.skin.id
+      setUser((oldUser) => ({
+        ...oldUser,
+        skinId
       }));
 
+      // Immediately update 3D model
       if (
         viewerRef.current
       ) {
@@ -265,12 +329,16 @@ export default function Dashboard() {
 
         await viewerRef.current.loadSkin(
           `/api/skin/${encodeURIComponent(
-            data.skin.id
+            skinId
           )}`
         );
 
         log(
           "✓ 3D viewer updated."
+        );
+      } else {
+        log(
+          "⚠ Viewer is not ready yet."
         );
       }
     } catch (error) {
@@ -286,12 +354,18 @@ export default function Dashboard() {
     }
   }
 
+  // --------------------------------------------------
+  // Loading screen
+  // --------------------------------------------------
+
   if (loading) {
     return (
       <main
         style={{
-          minHeight: "100vh",
-          padding: "30px",
+          minHeight:
+            "100vh",
+          padding:
+            "30px",
           fontFamily:
             "Arial, sans-serif"
         }}
@@ -303,11 +377,7 @@ export default function Dashboard() {
         <pre
           style={{
             whiteSpace:
-              "pre-wrap",
-            background:
-              "#f1f1f1",
-            padding: "15px",
-            borderRadius: "10px"
+              "pre-wrap"
           }}
         >
           {debug.join("\n")}
@@ -316,11 +386,17 @@ export default function Dashboard() {
     );
   }
 
+  // --------------------------------------------------
+  // Dashboard
+  // --------------------------------------------------
+
   return (
     <main
       style={{
-        minHeight: "100vh",
-        padding: "20px",
+        minHeight:
+          "100vh",
+        padding:
+          "20px",
         fontFamily:
           "Arial, sans-serif"
       }}
@@ -343,26 +419,33 @@ export default function Dashboard() {
 
       <div
         style={{
-          width: "350px",
-          maxWidth: "100%",
-          height: "500px",
+          width:
+            "350px",
+          maxWidth:
+            "100%",
+          height:
+            "500px",
           background:
             "#eeeeee",
           border:
             "1px solid #cccccc",
           borderRadius:
             "14px",
-          overflow: "hidden"
+          overflow:
+            "hidden"
         }}
       >
         <canvas
           ref={canvasRef}
-          width="350"
-          height="500"
+          width={350}
+          height={500}
           style={{
-            display: "block",
-            width: "100%",
-            height: "100%"
+            display:
+              "block",
+            width:
+              "100%",
+            height:
+              "100%"
           }}
         />
       </div>
@@ -373,9 +456,16 @@ export default function Dashboard() {
           : "No active skin"}
       </p>
 
+      <p>
+        {viewerReady
+          ? "🟢 3D viewer ready"
+          : "🟡 Starting 3D viewer..."}
+      </p>
+
       <div
         style={{
-          marginTop: "20px"
+          marginTop:
+            "20px"
         }}
       >
         <strong>
@@ -387,10 +477,15 @@ export default function Dashboard() {
         <input
           type="file"
           accept="image/png"
-          disabled={uploading}
-          onChange={uploadSkin}
+          disabled={
+            uploading
+          }
+          onChange={
+            uploadSkin
+          }
           style={{
-            marginTop: "10px"
+            marginTop:
+              "10px"
           }}
         />
       </div>
@@ -430,4 +525,4 @@ export default function Dashboard() {
       </pre>
     </main>
   );
-}
+        }
