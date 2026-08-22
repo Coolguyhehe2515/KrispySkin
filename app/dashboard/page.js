@@ -13,37 +13,79 @@ export default function Dashboard() {
   const viewer2DRef = useRef(null);
 
   const [user, setUser] = useState(null);
+  const [skins, setSkins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [loadingSkin, setLoadingSkin] = useState(null);
   const [viewMode, setViewMode] = useState("3d");
 
   // --------------------------------------------------
-  // Load account
+  // LOAD ACCOUNT + SKIN LIBRARY
   // --------------------------------------------------
 
   useEffect(() => {
-    async function loadUser() {
+    async function loadData() {
       try {
-        const response = await fetch("/api/auth/me", {
-          cache: "no-store",
-        });
+        const meResponse = await fetch(
+          "/api/auth/me",
+          {
+            cache: "no-store",
+          }
+        );
 
-        const data = await response.json();
+        const meData =
+          await meResponse.json();
 
-        if (!response.ok || !data.authenticated) {
+        if (
+          !meResponse.ok ||
+          !meData.authenticated
+        ) {
           router.replace("/login");
           return;
         }
 
-        setUser(data.user);
+        setUser(meData.user);
+
+        const libraryResponse =
+          await fetch(
+            "/api/skin/library",
+            {
+              cache: "no-store",
+            }
+          );
+
+        const libraryData =
+          await libraryResponse.json();
+
+        if (libraryResponse.ok) {
+          setSkins(
+            libraryData.skins || []
+          );
+
+          // Keep active skin in sync
+          if (
+            libraryData.activeSkin &&
+            libraryData.activeSkin !==
+              meData.user.skinId
+          ) {
+            setUser((oldUser) => ({
+              ...oldUser,
+              skinId:
+                libraryData.activeSkin,
+            }));
+          }
+        }
       } catch (error) {
-        console.error("Account error:", error);
+        console.error(
+          "Dashboard error:",
+          error
+        );
       } finally {
         setLoading(false);
       }
     }
 
-    loadUser();
+    loadData();
   }, [router]);
 
   // --------------------------------------------------
@@ -62,34 +104,55 @@ export default function Dashboard() {
 
     let destroyed = false;
 
-    async function create3DViewer() {
+    async function createViewer() {
       try {
-        const skinview3d = await import("skinview3d");
+        const skinview3d =
+          await import(
+            "skinview3d"
+          );
 
-        if (destroyed) return;
+        if (destroyed) {
+          return;
+        }
 
-        const viewer = new skinview3d.SkinViewer({
-          canvas: canvas3DRef.current,
-          width: 350,
-          height: 500,
-        });
+        const viewer =
+          new skinview3d.SkinViewer({
+            canvas:
+              canvas3DRef.current,
+            width: 350,
+            height: 500,
+          });
 
-        viewer3DRef.current = viewer;
+        viewer3DRef.current =
+          viewer;
 
-        viewer.controls.enableRotate = true;
-        viewer.controls.enableZoom = true;
-        viewer.controls.enablePan = false;
+        viewer.controls.enableRotate =
+          true;
 
-        viewer.camera.position.set(0, 0, 35);
+        viewer.controls.enableZoom =
+          true;
 
-        if (skinview3d.WalkingAnimation) {
+        viewer.controls.enablePan =
+          false;
+
+        viewer.camera.position.set(
+          0,
+          0,
+          35
+        );
+
+        if (
+          skinview3d.WalkingAnimation
+        ) {
           viewer.animation =
             new skinview3d.WalkingAnimation();
         }
 
         if (user.skinId) {
           await viewer.loadSkin(
-            `/api/skin/${encodeURIComponent(user.skinId)}`
+            `/api/skin/${encodeURIComponent(
+              user.skinId
+            )}`
           );
         }
       } catch (error) {
@@ -100,7 +163,7 @@ export default function Dashboard() {
       }
     }
 
-    create3DViewer();
+    createViewer();
 
     return () => {
       destroyed = true;
@@ -110,10 +173,15 @@ export default function Dashboard() {
           viewer3DRef.current.dispose();
         } catch {}
 
-        viewer3DRef.current = null;
+        viewer3DRef.current =
+          null;
       }
     };
-  }, [loading, user, viewMode]);
+  }, [
+    loading,
+    user,
+    viewMode,
+  ]);
 
   // --------------------------------------------------
   // 2D FRONT VIEW
@@ -131,34 +199,40 @@ export default function Dashboard() {
 
     let destroyed = false;
 
-    async function create2DViewer() {
+    async function createViewer() {
       try {
-        const skinview3d = await import("skinview3d");
+        const skinview3d =
+          await import(
+            "skinview3d"
+          );
 
-        if (destroyed) return;
+        if (destroyed) {
+          return;
+        }
 
-        const viewer = new skinview3d.SkinViewer({
-          canvas: canvas2DRef.current,
-          width: 350,
-          height: 500,
-        });
+        const viewer =
+          new skinview3d.SkinViewer({
+            canvas:
+              canvas2DRef.current,
+            width: 350,
+            height: 500,
+          });
 
-        viewer2DRef.current = viewer;
+        viewer2DRef.current =
+          viewer;
 
-        // No animation in 2D mode
-        viewer.animation = null;
+        viewer.controls.enableRotate =
+          false;
 
-        // Disable all interaction
-        viewer.controls.enableRotate = false;
-        viewer.controls.enableZoom = false;
-        viewer.controls.enablePan = false;
+        viewer.controls.enableZoom =
+          false;
 
-        /*
-         * Front-facing Minecraft player.
-         *
-         * skinview3d's default player faces the camera.
-         * Keep the camera centered and lock interaction.
-         */
+        viewer.controls.enablePan =
+          false;
+
+        viewer.animation =
+          null;
+
         viewer.camera.position.set(
           0,
           0,
@@ -173,7 +247,9 @@ export default function Dashboard() {
 
         if (user.skinId) {
           await viewer.loadSkin(
-            `/api/skin/${encodeURIComponent(user.skinId)}`
+            `/api/skin/${encodeURIComponent(
+              user.skinId
+            )}`
           );
         }
       } catch (error) {
@@ -184,7 +260,7 @@ export default function Dashboard() {
       }
     }
 
-    create2DViewer();
+    createViewer();
 
     return () => {
       destroyed = true;
@@ -194,28 +270,48 @@ export default function Dashboard() {
           viewer2DRef.current.dispose();
         } catch {}
 
-        viewer2DRef.current = null;
+        viewer2DRef.current =
+          null;
       }
     };
-  }, [loading, user, viewMode]);
+  }, [
+    loading,
+    user,
+    viewMode,
+  ]);
 
   // --------------------------------------------------
-  // Upload
+  // UPLOAD SKIN
   // --------------------------------------------------
 
   async function uploadSkin(event) {
-    const file = event.target.files?.[0];
+    const file =
+      event.target.files?.[0];
 
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
-    if (file.type !== "image/png") {
-      alert("Only PNG files are allowed.");
+    if (
+      file.type !==
+      "image/png"
+    ) {
+      alert(
+        "Only PNG files are allowed."
+      );
+
       event.target.value = "";
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Maximum skin size is 2 MB.");
+    if (
+      file.size >
+      2 * 1024 * 1024
+    ) {
+      alert(
+        "Maximum skin size is 2 MB."
+      );
+
       event.target.value = "";
       return;
     }
@@ -223,40 +319,61 @@ export default function Dashboard() {
     setUploading(true);
 
     try {
-      const formData = new FormData();
+      const formData =
+        new FormData();
 
-      formData.append("file", file);
-
-      const response = await fetch(
-        "/api/skin",
-        {
-          method: "POST",
-          body: formData,
-        }
+      formData.append(
+        "file",
+        file
       );
 
-      const data = await response.json();
+      const response =
+        await fetch(
+          "/api/skin",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
         alert(
-          data.error || "Upload failed."
+          data.error ||
+            "Upload failed."
         );
 
         return;
       }
 
-      const skinId = data.skin.id;
+      const skinId =
+        data.skin.id;
 
+      // Add to local library
+      setSkins((oldSkins) => {
+        if (
+          oldSkins.includes(
+            skinId
+          )
+        ) {
+          return oldSkins;
+        }
+
+        return [
+          ...oldSkins,
+          skinId,
+        ];
+      });
+
+      // New upload becomes active
       setUser((oldUser) => ({
         ...oldUser,
         skinId,
       }));
 
-      /*
-       * Immediately update whichever viewer
-       * is currently active.
-       */
-
+      // Update current viewer
       if (
         viewMode === "3d" &&
         viewer3DRef.current
@@ -294,18 +411,90 @@ export default function Dashboard() {
   }
 
   // --------------------------------------------------
-  // Loading
+  // LOAD SAVED SKIN
+  // --------------------------------------------------
+
+  async function loadSkin(
+    skinId
+  ) {
+    if (
+      skinId === user?.skinId
+    ) {
+      return;
+    }
+
+    setLoadingSkin(
+      skinId
+    );
+
+    try {
+      const response =
+        await fetch(
+          "/api/skin/load",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              skinId,
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        alert(
+          data.error ||
+            "Failed to load skin."
+        );
+
+        return;
+      }
+
+      setUser((oldUser) => ({
+        ...oldUser,
+        skinId:
+          data.activeSkin,
+      }));
+
+      // Viewer will automatically
+      // reload because user.skinId changes.
+    } catch (error) {
+      console.error(
+        "Load skin error:",
+        error
+      );
+
+      alert(
+        "Failed to load skin."
+      );
+    } finally {
+      setLoadingSkin(null);
+    }
+  }
+
+  // --------------------------------------------------
+  // LOADING
   // --------------------------------------------------
 
   if (loading) {
     return (
       <main
         style={{
-          minHeight: "100vh",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          fontFamily: "Arial, sans-serif",
+          minHeight:
+            "100vh",
+          display:
+            "flex",
+          justifyContent:
+            "center",
+          alignItems:
+            "center",
+          fontFamily:
+            "Arial, sans-serif",
         }}
       >
         <h1>
@@ -316,15 +505,18 @@ export default function Dashboard() {
   }
 
   // --------------------------------------------------
-  // Dashboard
+  // DASHBOARD
   // --------------------------------------------------
 
   return (
     <main
       style={{
-        minHeight: "100vh",
-        padding: "30px",
-        fontFamily: "Arial, sans-serif",
+        minHeight:
+          "100vh",
+        padding:
+          "30px",
+        fontFamily:
+          "Arial, sans-serif",
       }}
     >
       <h1>
@@ -343,26 +535,36 @@ export default function Dashboard() {
         Your Skin
       </h2>
 
-      {/* VIEW SWITCHER */}
+      {/* VIEW BUTTONS */}
 
       <div
         style={{
-          display: "flex",
-          gap: "10px",
-          marginBottom: "15px",
+          display:
+            "flex",
+          gap:
+            "10px",
+          marginBottom:
+            "15px",
         }}
       >
         <button
           onClick={() =>
-            setViewMode("3d")
+            setViewMode(
+              "3d"
+            )
           }
           style={{
-            padding: "10px 22px",
-            borderRadius: "8px",
-            border: "1px solid #ccc",
-            cursor: "pointer",
+            padding:
+              "10px 22px",
+            borderRadius:
+              "8px",
+            border:
+              "1px solid #ccc",
+            cursor:
+              "pointer",
             fontWeight:
-              viewMode === "3d"
+              viewMode ===
+              "3d"
                 ? "bold"
                 : "normal",
           }}
@@ -372,15 +574,22 @@ export default function Dashboard() {
 
         <button
           onClick={() =>
-            setViewMode("2d")
+            setViewMode(
+              "2d"
+            )
           }
           style={{
-            padding: "10px 22px",
-            borderRadius: "8px",
-            border: "1px solid #ccc",
-            cursor: "pointer",
+            padding:
+              "10px 22px",
+            borderRadius:
+              "8px",
+            border:
+              "1px solid #ccc",
+            cursor:
+              "pointer",
             fontWeight:
-              viewMode === "2d"
+              viewMode ===
+              "2d"
                 ? "bold"
                 : "normal",
           }}
@@ -389,75 +598,104 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* 3D */}
+      {/* 3D VIEW */}
 
-      {viewMode === "3d" && (
+      {viewMode ===
+        "3d" && (
         <div
           style={{
-            width: "350px",
-            maxWidth: "100%",
-            height: "500px",
-            background: "#eeeeee",
-            border: "1px solid #cccccc",
-            borderRadius: "14px",
-            overflow: "hidden",
+            width:
+              "350px",
+            maxWidth:
+              "100%",
+            height:
+              "500px",
+            background:
+              "#eeeeee",
+            border:
+              "1px solid #cccccc",
+            borderRadius:
+              "14px",
+            overflow:
+              "hidden",
           }}
         >
           <canvas
-            ref={canvas3DRef}
+            ref={
+              canvas3DRef
+            }
             width={350}
             height={500}
             style={{
-              display: "block",
-              width: "100%",
-              height: "100%",
+              display:
+                "block",
+              width:
+                "100%",
+              height:
+                "100%",
             }}
           />
         </div>
       )}
 
-      {/* 2D FRONT PLAYER */}
+      {/* 2D VIEW */}
 
-      {viewMode === "2d" && (
+      {viewMode ===
+        "2d" && (
         <div
           style={{
-            width: "350px",
-            maxWidth: "100%",
-            height: "500px",
-            background: "#eeeeee",
-            border: "1px solid #cccccc",
-            borderRadius: "14px",
-            overflow: "hidden",
+            width:
+              "350px",
+            maxWidth:
+              "100%",
+            height:
+              "500px",
+            background:
+              "#eeeeee",
+            border:
+              "1px solid #cccccc",
+            borderRadius:
+              "14px",
+            overflow:
+              "hidden",
           }}
         >
           <canvas
-            ref={canvas2DRef}
+            ref={
+              canvas2DRef
+            }
             width={350}
             height={500}
             style={{
-              display: "block",
-              width: "100%",
-              height: "100%",
+              display:
+                "block",
+              width:
+                "100%",
+              height:
+                "100%",
             }}
           />
         </div>
       )}
 
       <p>
-        {user?.skinId
-          ? `Active skin: ${user.skinId}`
-          : "No active skin"}
+        Active Skin:{" "}
+        <strong>
+          {user?.skinId ||
+            "None"}
+        </strong>
       </p>
 
       {/* UPLOAD */}
 
       <div
         style={{
-          marginTop: "20px",
+          marginTop:
+            "20px",
         }}
       >
         <strong>
-          Upload new skin
+          Upload New Skin
         </strong>
 
         <br />
@@ -465,13 +703,153 @@ export default function Dashboard() {
         <input
           type="file"
           accept="image/png"
-          disabled={uploading}
-          onChange={uploadSkin}
+          disabled={
+            uploading
+          }
+          onChange={
+            uploadSkin
+          }
           style={{
-            marginTop: "10px",
+            marginTop:
+              "10px",
           }}
         />
       </div>
+
+      {/* SKIN LIBRARY */}
+
+      <section
+        style={{
+          marginTop:
+            "35px",
+        }}
+      >
+        <h2>
+          My Skins
+        </h2>
+
+        {skins.length ===
+        0 ? (
+          <p>
+            You haven't saved
+            any skins yet.
+          </p>
+        ) : (
+          <div
+            style={{
+              display:
+                "grid",
+              gridTemplateColumns:
+                "repeat(auto-fill, minmax(220px, 1fr))",
+              gap:
+                "15px",
+            }}
+          >
+            {skins.map(
+              (skinId) => {
+                const active =
+                  skinId ===
+                  user?.skinId;
+
+                return (
+                  <div
+                    key={
+                      skinId
+                    }
+                    style={{
+                      padding:
+                        "15px",
+                      border:
+                        "1px solid #ccc",
+                      borderRadius:
+                        "12px",
+                      background:
+                        active
+                          ? "#e9ffe9"
+                          : "#fff",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display:
+                          "flex",
+                        alignItems:
+                          "center",
+                        justifyContent:
+                          "space-between",
+                        gap:
+                          "10px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          minWidth:
+                            0,
+                        }}
+                      >
+                        <strong>
+                          {active
+                            ? "Active Skin"
+                            : "Saved Skin"}
+                        </strong>
+
+                        <div
+                          style={{
+                            marginTop:
+                              "5px",
+                            fontSize:
+                              "12px",
+                            overflow:
+                              "hidden",
+                            textOverflow:
+                              "ellipsis",
+                            whiteSpace:
+                              "nowrap",
+                          }}
+                        >
+                          {skinId}
+                        </div>
+                      </div>
+
+                      <button
+                        disabled={
+                          active ||
+                          loadingSkin ===
+                            skinId
+                        }
+                        onClick={() =>
+                          loadSkin(
+                            skinId
+                          )
+                        }
+                        style={{
+                          padding:
+                            "8px 14px",
+                          borderRadius:
+                            "7px",
+                          border:
+                            "1px solid #ccc",
+                          cursor:
+                            active
+                              ? "default"
+                              : "pointer",
+                        }}
+                      >
+                        {active
+                          ? "Active"
+                          : loadingSkin ===
+                              skinId
+                            ? "Loading..."
+                            : "Load"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+            )}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
