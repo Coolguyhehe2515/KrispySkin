@@ -2,28 +2,35 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  SkinViewer,
-  WalkingAnimation
-} from "skinview3d";
 
 export default function Dashboard() {
   const router = useRouter();
+
   const canvasRef = useRef(null);
   const viewerRef = useRef(null);
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [debug, setDebug] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState("");
+
+  function log(message) {
+    setDebug((old) => [
+      ...old,
+      `${new Date().toLocaleTimeString()} — ${message}`
+    ]);
+  }
 
   useEffect(() => {
-    let viewer;
-    let cancelled = false;
+    let destroyed = false;
 
     async function initialize() {
       try {
-        // 1. Check login
+        log("Starting dashboard...");
+
+        // Check login
+        log("Checking KrispySkin session...");
+
         const response = await fetch("/api/auth/me", {
           cache: "no-store"
         });
@@ -31,55 +38,136 @@ export default function Dashboard() {
         const data = await response.json();
 
         if (!response.ok || !data.authenticated) {
+          log("❌ User is not authenticated.");
           router.replace("/login");
           return;
         }
 
-        if (cancelled) return;
+        if (destroyed) return;
 
         setUser(data.user);
 
-        // 2. Create Minecraft 3D viewer
-        viewer = new SkinViewer({
-          canvas: canvasRef.current,
-          width: 350,
-          height: 500
-        });
+        log(`✓ Logged in as ${data.user.username}`);
+
+        if (data.user.skinId) {
+          log(`✓ Skin ID: ${data.user.skinId}`);
+        } else {
+          log("⚠ No active skin.");
+        }
+
+        // Wait until browser renders canvas
+        log("Waiting for canvas...");
+
+        await new Promise((resolve) =>
+          requestAnimationFrame(resolve)
+        );
+
+        if (destroyed) return;
+
+        if (!canvasRef.current) {
+          throw new Error(
+            "Canvas element was not found."
+          );
+        }
+
+        log("✓ Canvas found.");
+
+        // Dynamically import skinview3d
+        log("Loading skinview3d...");
+
+        const skinview3d =
+          await import("skinview3d");
+
+        log("✓ skinview3d imported.");
+
+        if (
+          !skinview3d ||
+          !skinview3d.SkinViewer
+        ) {
+          throw new Error(
+            "SkinViewer class was not found in skinview3d."
+          );
+        }
+
+        log("✓ SkinViewer class found.");
+
+        const viewer =
+          new skinview3d.SkinViewer({
+            canvas: canvasRef.current,
+            width: 350,
+            height: 500
+          });
 
         viewerRef.current = viewer;
 
-        viewer.camera.position.set(0, 0, 35);
+        log("✓ SkinViewer created.");
 
         viewer.controls.enableRotate = true;
         viewer.controls.enableZoom = true;
         viewer.controls.enablePan = false;
 
-        viewer.animation = new WalkingAnimation();
+        viewer.camera.position.set(
+          0,
+          0,
+          35
+        );
 
-        // 3. Load the user's saved skin
+        log("✓ Camera configured.");
+
+        if (
+          skinview3d.WalkingAnimation
+        ) {
+          viewer.animation =
+            new skinview3d.WalkingAnimation();
+
+          log("✓ Walking animation enabled.");
+        } else {
+          log(
+            "⚠ WalkingAnimation unavailable."
+          );
+        }
+
         if (data.user.skinId) {
           const skinUrl =
-            `/api/skin/${encodeURIComponent(data.user.skinId)}`;
+            `/api/skin/${encodeURIComponent(
+              data.user.skinId
+            )}`;
 
-          await viewer.loadSkin(skinUrl);
+          log(
+            `Loading skin: ${skinUrl}`
+          );
 
-          if (!cancelled) {
-            setMessage("Skin loaded successfully.");
-          }
+          await viewer.loadSkin(
+            skinUrl
+          );
+
+          log("✓ Skin loaded successfully.");
         } else {
-          if (!cancelled) {
-            setMessage("You don't have an active skin yet.");
-          }
+          log(
+            "No skin to load."
+          );
         }
       } catch (error) {
-        console.error("Dashboard error:", error);
+        console.error(error);
 
-        if (!cancelled) {
-          setMessage("Failed to load your skin.");
+        log(
+          `❌ ERROR: ${
+            error?.message ||
+            String(error)
+          }`
+        );
+
+        if (
+          error?.stack
+        ) {
+          log(
+            `STACK: ${error.stack}`
+          );
         }
       } finally {
-        if (!cancelled) {
+        if (!destroyed) {
           setLoading(false);
+          log("Dashboard initialization finished.");
         }
       }
     }
@@ -87,75 +175,111 @@ export default function Dashboard() {
     initialize();
 
     return () => {
-      cancelled = true;
+      destroyed = true;
 
-      if (viewer) {
-        viewer.dispose();
+      if (viewerRef.current) {
+        try {
+          viewerRef.current.dispose();
+        } catch {}
+
+        viewerRef.current = null;
       }
-
-      viewerRef.current = null;
     };
   }, [router]);
 
   async function uploadSkin(event) {
-    const file = event.target.files?.[0];
+    const file =
+      event.target.files?.[0];
 
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     if (file.type !== "image/png") {
-      setMessage("Only PNG files are allowed.");
-      event.target.value = "";
+      alert(
+        "Only PNG files are allowed."
+      );
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      setMessage("Maximum skin size is 2 MB.");
-      event.target.value = "";
+    if (
+      file.size >
+      2 * 1024 * 1024
+    ) {
+      alert(
+        "Maximum file size is 2 MB."
+      );
       return;
     }
 
     setUploading(true);
-    setMessage("Uploading skin...");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      const formData =
+        new FormData();
 
-      const response = await fetch("/api/skin", {
-        method: "POST",
-        body: formData
-      });
+      formData.append(
+        "file",
+        file
+      );
 
-      const data = await response.json();
+      log(
+        "Uploading new skin..."
+      );
+
+      const response =
+        await fetch(
+          "/api/skin",
+          {
+            method: "POST",
+            body: formData
+          }
+        );
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
-        setMessage(data.error || "Upload failed.");
+        log(
+          `❌ Upload failed: ${
+            data.error ||
+            "Unknown error"
+          }`
+        );
         return;
       }
 
-      const skinId = data.skin.id;
+      log(
+        `✓ Uploaded: ${data.skin.id}`
+      );
 
-      // Update the 3D viewer immediately
-      if (viewerRef.current) {
-        await viewerRef.current.loadSkin(
-          `/api/skin/${encodeURIComponent(skinId)}`
-        );
-      }
-
-      // Update local user state
-      setUser((currentUser) => ({
-        ...currentUser,
-        skinId
+      setUser((old) => ({
+        ...old,
+        skinId: data.skin.id
       }));
 
-      setMessage(
-        `Skin uploaded successfully: ${skinId}`
-      );
+      if (
+        viewerRef.current
+      ) {
+        log(
+          "Updating 3D viewer..."
+        );
+
+        await viewerRef.current.loadSkin(
+          `/api/skin/${encodeURIComponent(
+            data.skin.id
+          )}`
+        );
+
+        log(
+          "✓ 3D viewer updated."
+        );
+      }
     } catch (error) {
-      console.error("Upload error:", error);
-      setMessage("Failed to upload skin.");
+      log(
+        `❌ Upload error: ${
+          error?.message ||
+          String(error)
+        }`
+      );
     } finally {
       setUploading(false);
       event.target.value = "";
@@ -167,13 +291,27 @@ export default function Dashboard() {
       <main
         style={{
           minHeight: "100vh",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          fontFamily: "Arial, sans-serif"
+          padding: "30px",
+          fontFamily:
+            "Arial, sans-serif"
         }}
       >
-        <h1>Loading KrispySkin...</h1>
+        <h1>
+          Loading KrispySkin...
+        </h1>
+
+        <pre
+          style={{
+            whiteSpace:
+              "pre-wrap",
+            background:
+              "#f1f1f1",
+            padding: "15px",
+            borderRadius: "10px"
+          }}
+        >
+          {debug.join("\n")}
+        </pre>
       </main>
     );
   }
@@ -182,77 +320,114 @@ export default function Dashboard() {
     <main
       style={{
         minHeight: "100vh",
-        padding: "30px",
-        fontFamily: "Arial, sans-serif"
+        padding: "20px",
+        fontFamily:
+          "Arial, sans-serif"
       }}
     >
-      <h1>KrispySkin Dashboard</h1>
+      <h1>
+        KrispySkin Dashboard
+      </h1>
 
       <p>
         Welcome,{" "}
-        <strong>{user?.username}</strong> 👋
+        <strong>
+          {user?.username}
+        </strong>{" "}
+        👋
       </p>
 
-      <section
+      <h2>
+        Your Skin
+      </h2>
+
+      <div
         style={{
-          marginTop: "30px"
+          width: "350px",
+          maxWidth: "100%",
+          height: "500px",
+          background:
+            "#eeeeee",
+          border:
+            "1px solid #cccccc",
+          borderRadius:
+            "14px",
+          overflow: "hidden"
         }}
       >
-        <h2>Your Skin</h2>
-
-        <div
+        <canvas
+          ref={canvasRef}
+          width="350"
+          height="500"
           style={{
-            width: "350px",
-            maxWidth: "100%",
-            border: "1px solid #ddd",
-            borderRadius: "14px",
-            overflow: "hidden"
+            display: "block",
+            width: "100%",
+            height: "100%"
           }}
-        >
-          <canvas
-            ref={canvasRef}
-            width={350}
-            height={500}
-            style={{
-              display: "block",
-              width: "100%",
-              height: "500px"
-            }}
-          />
-        </div>
+        />
+      </div>
 
-        <p>
-          {user?.skinId
-            ? `Active skin: ${user.skinId}`
-            : "No active skin"}
-        </p>
+      <p>
+        {user?.skinId
+          ? `Active skin: ${user.skinId}`
+          : "No active skin"}
+      </p>
 
-        <div style={{ marginTop: "20px" }}>
-          <label>
-            <strong>Upload new skin</strong>
+      <div
+        style={{
+          marginTop: "20px"
+        }}
+      >
+        <strong>
+          Upload new skin
+        </strong>
 
-            <br />
+        <br />
 
-            <input
-              type="file"
-              accept="image/png"
-              disabled={uploading}
-              onChange={uploadSkin}
-              style={{
-                marginTop: "10px"
-              }}
-            />
-          </label>
-        </div>
+        <input
+          type="file"
+          accept="image/png"
+          disabled={uploading}
+          onChange={uploadSkin}
+          style={{
+            marginTop: "10px"
+          }}
+        />
+      </div>
 
-        {uploading && (
-          <p>Uploading...</p>
-        )}
+      <hr
+        style={{
+          margin:
+            "30px 0"
+        }}
+      />
 
-        {message && (
-          <p>{message}</p>
-        )}
-      </section>
+      <h2>
+        3D Debug
+      </h2>
+
+      <pre
+        style={{
+          whiteSpace:
+            "pre-wrap",
+          overflowWrap:
+            "anywhere",
+          background:
+            "#111",
+          color:
+            "#fff",
+          padding:
+            "15px",
+          borderRadius:
+            "10px",
+          fontSize:
+            "12px"
+        }}
+      >
+        {debug.length
+          ? debug.join("\n")
+          : "No debug information yet."}
+      </pre>
     </main>
   );
-          }
+}
