@@ -321,3 +321,236 @@ export default function CommunityPage() {
           ))}
         </div>
       )}
+      {reportPostId && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background:
+              "rgba(0,0,0,0.55)",
+            display: "flex",
+            justifyContent:
+              "center",
+            alignItems:
+              "center",
+            padding: "20px",
+            zIndex: 9999
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "450px",
+              background: "#fff",
+              borderRadius: "14px",
+              padding: "25px",
+              boxSizing:
+                "border-box"
+            }}
+          >
+            <h2>
+              Report Post
+            </h2>
+
+            <p>
+              Why are you reporting
+              this post?
+            </p>
+
+            <select
+              value={reportReason}
+              onChange={(event) => {
+                const value =
+                  event.target.value;
+
+                setReportReason(
+                  value
+                );
+
+                if (
+                  value !== "other"
+                ) {
+                  setOtherReason(
+                    ""
+                  );
+                }
+
+                setReportDescription(
+                  ""
+                );
+              }}
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius:
+                  "8px",
+                border:
+                  "1px solid #ccc",
+                boxSizing:
+                  "border-box"
+              }}
+            >
+              <option value="">
+                Select a reason
+              </option>
+
+              <option value="nsfw">
+                NSFW / Sexual Content
+              </option>
+
+              <option value="racist">
+                Racist / Hateful Content
+              </option>
+
+              <option value="predatory">
+                Predatory / Grooming-related
+              </option>
+
+              <option value="harassment">
+                Harassment Toward a Specific Person
+              </option>
+
+              <option value="impersonation">
+                Impersonation
+              </option>
+
+              <option value="inappropriate">
+                Other Inappropriate Content
+              </option>
+
+              <option value="other">
+                Other
+              </option>
+            </select>
+
+            {reportReason ===
+              "other" ? (
+              <textarea
+                value={
+                  otherReason
+                }
+                onChange={(event) =>
+                  setOtherReason(
+                    event.target.value
+                  )
+                }
+                maxLength={1000}
+                rows={5}
+                placeholder="Please explain why you are reporting this post..."
+                style={{
+                  width: "100%",
+                  boxSizing:
+                    "border-box",
+                  marginTop:
+                    "15px",
+                  padding:
+                    "10px",
+                  borderRadius:
+                    "8px",
+                  border:
+                    "1px solid #ccc",
+                  resize:
+                    "vertical"
+                }}
+              />
+            ) : (
+              <textarea
+                value={
+                  reportDescription
+                }
+                onChange={(event) =>
+                  setReportDescription(
+                    event.target.value
+                  )
+                }
+                maxLength={1000}
+                rows={5}
+                placeholder="Optional additional information..."
+                style={{
+                  width: "100%",
+                  boxSizing:
+                    "border-box",
+                  marginTop:
+                    "15px",
+                  padding:
+                    "10px",
+                  borderRadius:
+                    "8px",
+                  border:
+                    "1px solid #ccc",
+                  resize:
+                    "vertical"
+                }}
+              />
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent:
+                  "flex-end",
+                gap: "10px",
+                marginTop:
+                  "15px"
+              }}
+            >
+              <button
+                onClick={
+                  closeReportModal
+                }
+                disabled={
+                  reporting
+                }
+                style={{
+                  padding:
+                    "10px 15px",
+                  borderRadius:
+                    "8px",
+                  border:
+                    "1px solid #ccc",
+                  background:
+                    "#fff",
+                  cursor:
+                    "pointer"
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={
+                  submitReport
+                }
+                disabled={
+                  reporting ||
+                  !reportReason ||
+                  (reportReason ===
+                    "other" &&
+                    !otherReason.trim())
+                }
+                style={{
+                  padding:
+                    "10px 15px",
+                  borderRadius:
+                    "8px",
+                  border:
+                    "1px solid #111",
+                  background:
+                    "#111",
+                  color:
+                    "#fff",
+                  cursor:
+                    "pointer"
+                }}
+              >
+                {reporting
+                  ? "Submitting..."
+                  : "Submit Report"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+              }
