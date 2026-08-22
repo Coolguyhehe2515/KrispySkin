@@ -17,23 +17,85 @@ export default function Dashboard() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function loadUser() {
-    const response = await fetch(
-      "/api/auth/me",
-      {
-        cache: "no-store"
+  useEffect(() => {
+    let viewer;
+    let cancelled = false;
+
+    async function initialize() {
+      try {
+        // 1. Check login
+        const response = await fetch("/api/auth/me", {
+          cache: "no-store"
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.authenticated) {
+          router.replace("/login");
+          return;
+        }
+
+        if (cancelled) return;
+
+        setUser(data.user);
+
+        // 2. Create Minecraft 3D viewer
+        viewer = new SkinViewer({
+          canvas: canvasRef.current,
+          width: 350,
+          height: 500
+        });
+
+        viewerRef.current = viewer;
+
+        viewer.camera.position.set(0, 0, 35);
+
+        viewer.controls.enableRotate = true;
+        viewer.controls.enableZoom = true;
+        viewer.controls.enablePan = false;
+
+        viewer.animation = new WalkingAnimation();
+
+        // 3. Load the user's saved skin
+        if (data.user.skinId) {
+          const skinUrl =
+            `/api/skin/${encodeURIComponent(data.user.skinId)}`;
+
+          await viewer.loadSkin(skinUrl);
+
+          if (!cancelled) {
+            setMessage("Skin loaded successfully.");
+          }
+        } else {
+          if (!cancelled) {
+            setMessage("You don't have an active skin yet.");
+          }
+        }
+      } catch (error) {
+        console.error("Dashboard error:", error);
+
+        if (!cancelled) {
+          setMessage("Failed to load your skin.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || !data.authenticated) {
-      router.replace("/login");
-      return;
     }
 
-    setUser(data.user);
-  }
+    initialize();
+
+    return () => {
+      cancelled = true;
+
+      if (viewer) {
+        viewer.dispose();
+      }
+
+      viewerRef.current = null;
+    };
+  }, [router]);
 
   async function uploadSkin(event) {
     const file = event.target.files?.[0];
@@ -44,24 +106,27 @@ export default function Dashboard() {
 
     if (file.type !== "image/png") {
       setMessage("Only PNG files are allowed.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage("Maximum skin size is 2 MB.");
+      event.target.value = "";
       return;
     }
 
     setUploading(true);
-    setMessage("");
+    setMessage("Uploading skin...");
 
     try {
       const formData = new FormData();
-
       formData.append("file", file);
 
-      const response = await fetch(
-        "/api/skin",
-        {
-          method: "POST",
-          body: formData
-        }
-      );
+      const response = await fetch("/api/skin", {
+        method: "POST",
+        body: formData
+      });
 
       const data = await response.json();
 
@@ -70,91 +135,41 @@ export default function Dashboard() {
         return;
       }
 
-      setMessage(
-        `Skin uploaded: ${data.skin.id}`
-      );
+      const skinId = data.skin.id;
 
-      await loadUser();
-
+      // Update the 3D viewer immediately
       if (viewerRef.current) {
         await viewerRef.current.loadSkin(
-          `/api/skin/${encodeURIComponent(
-            data.skin.id
-          )}`
+          `/api/skin/${encodeURIComponent(skinId)}`
         );
       }
-    } catch (error) {
-      console.error(error);
+
+      // Update local user state
+      setUser((currentUser) => ({
+        ...currentUser,
+        skinId
+      }));
+
       setMessage(
-        "Failed to upload skin."
+        `Skin uploaded successfully: ${skinId}`
       );
+    } catch (error) {
+      console.error("Upload error:", error);
+      setMessage("Failed to upload skin.");
     } finally {
       setUploading(false);
-
       event.target.value = "";
     }
   }
-
-  useEffect(() => {
-    async function initialize() {
-      try {
-        await loadUser();
-
-        const viewer = new SkinViewer({
-          canvas: canvasRef.current,
-          width: 350,
-          height: 500
-        });
-
-        viewerRef.current = viewer;
-
-        viewer.camera.position.set(
-          0,
-          0,
-          35
-        );
-
-        viewer.controls.enableRotate = true;
-        viewer.controls.enableZoom = true;
-        viewer.controls.enablePan = false;
-
-        viewer.animation =
-          new WalkingAnimation();
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    initialize();
-
-    return () => {
-      if (viewerRef.current) {
-        viewerRef.current.dispose();
-        viewerRef.current = null;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (
-      user?.skinId &&
-      viewerRef.current
-    ) {
-      viewerRef.current.loadSkin(
-        `/api/skin/${encodeURIComponent(
-          user.skinId
-        )}`
-      );
-    }
-  }, [user]);
 
   if (loading) {
     return (
       <main
         style={{
-          padding: "30px",
+          minHeight: "100vh",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
           fontFamily: "Arial, sans-serif"
         }}
       >
@@ -175,10 +190,7 @@ export default function Dashboard() {
 
       <p>
         Welcome,{" "}
-        <strong>
-          {user?.username}
-        </strong>{" "}
-        👋
+        <strong>{user?.username}</strong> 👋
       </p>
 
       <section
@@ -199,6 +211,8 @@ export default function Dashboard() {
         >
           <canvas
             ref={canvasRef}
+            width={350}
+            height={500}
             style={{
               display: "block",
               width: "100%",
@@ -207,29 +221,23 @@ export default function Dashboard() {
           />
         </div>
 
-        {!user?.skinId && (
-          <p>
-            You don't have an active skin yet.
-          </p>
-        )}
+        <p>
+          {user?.skinId
+            ? `Active skin: ${user.skinId}`
+            : "No active skin"}
+        </p>
 
-        <div
-          style={{
-            marginTop: "20px"
-          }}
-        >
+        <div style={{ marginTop: "20px" }}>
           <label>
-            <strong>
-              Upload new skin
-            </strong>
+            <strong>Upload new skin</strong>
 
             <br />
 
             <input
               type="file"
               accept="image/png"
-              onChange={uploadSkin}
               disabled={uploading}
+              onChange={uploadSkin}
               style={{
                 marginTop: "10px"
               }}
@@ -238,17 +246,13 @@ export default function Dashboard() {
         </div>
 
         {uploading && (
-          <p>
-            Uploading skin...
-          </p>
+          <p>Uploading...</p>
         )}
 
         {message && (
-          <p>
-            {message}
-          </p>
+          <p>{message}</p>
         )}
       </section>
     </main>
   );
-}
+          }
