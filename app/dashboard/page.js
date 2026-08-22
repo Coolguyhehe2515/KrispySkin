@@ -1019,4 +1019,343 @@ export default function Dashboard() {
                         }}
                       >
                         {active
+
+                        ? "Active"
+                        : "Saved Skin"}
+                    </strong>
+
+                    <div
+                      style={{
+                        marginTop:
+                          "6px",
+                        fontSize:
+                          "12px",
+                        overflow:
+                          "hidden",
+                        textOverflow:
+                          "ellipsis",
+                        whiteSpace:
+                          "nowrap"
+                      }}
+                    >
+                      {filename ||
+                        skinId}
+                    </div>
+
+                    <div
+                      style={{
+                        display:
+                          "flex",
+                        flexWrap:
+                          "wrap",
+                        gap:
+                          "7px",
+                        marginTop:
+                          "12px"
+                      }}
+                    >
+                      <button
+                        disabled={
+                          active ||
+                          loadingSkin ===
+                            skinId
+                        }
+                        onClick={() =>
+                          loadSkin(
+                            skinId
+                          )
+                        }
+                        style={{
+                          padding:
+                            "8px 12px",
+                          borderRadius:
+                            "7px",
+                          border:
+                            "1px solid #ccc",
+                          cursor:
+                            "pointer"
+                        }}
+                      >
+                        {active
+                          ? "Active"
+                          : loadingSkin ===
+                              skinId
+                            ? "Loading..."
+                            : "Load"}
+                      </button>
+
+                      <button
+                        disabled={
+                          postingSkin ===
+                          skinId
+                        }
+                        onClick={() =>
+                          openPostModal(
+                            skinId
+                          )
+                        }
+                        style={{
+                          padding:
+                            "8px 12px",
+                          borderRadius:
+                            "7px",
+                          border:
+                            "1px solid #ccc",
+                          cursor:
+                            "pointer"
+                        }}
+                      >
+                        Post
+                      </button>
+
+                      <button
+                        disabled={
+                          deletingSkin ===
+                          skinId
+                        }
+                        onClick={() =>
+                          deleteSkin(
+                            skinId
+                          )
+                        }
+                        style={{
+                          padding:
+                            "8px 12px",
+                          borderRadius:
+                            "7px",
+                          border:
+                            "1px solid #ccc",
+                          cursor:
+                            "pointer"
+                        }}
+                      >
+                        {deletingSkin ===
+                        skinId
+                          ? "Deleting..."
+                          : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* COMMUNITY */}
+
+      <div
+        style={{
+          marginTop:
+            "35px"
+        }}
+      >
+        <a
+          href="/posts"
+          style={{
+            display:
+              "inline-block",
+            padding:
+              "11px 18px",
+            borderRadius:
+              "8px",
+            background:
+              "#111",
+            color:
+              "#fff",
+            textDecoration:
+              "none"
+          }}
+        >
+          Browse Community
+        </a>
+      </div>
+
+      {/* POST MODAL */}
+
+      {postModalSkin && (
+        <div
+          style={{
+            position:
+              "fixed",
+            inset: 0,
+            background:
+              "rgba(0,0,0,0.55)",
+            display:
+              "flex",
+            justifyContent:
+              "center",
+            alignItems:
+              "center",
+            padding:
+              "20px",
+            zIndex:
+              9999
+          }}
+        >
+          <div
+            style={{
+              width:
+                "100%",
+              maxWidth:
+                "450px",
+              background:
+                "#fff",
+              borderRadius:
+                "14px",
+              padding:
+                "25px",
+              boxSizing:
+                "border-box"
+            }}
+          >
+            <h2>
+              Post Skin
+            </h2>
+
+            <p>
+              Share this skin with
+              the KrispySkin
+              community.
+            </p>
+
+            <label>
+              Title
+            </label>
+
+            <input
+              value={
+                postTitle
+              }
+              onChange={(event) =>
+                setPostTitle(
+                  event.target.value
+                )
+              }
+              maxLength={100}
+              placeholder="My Awesome Skin"
+              style={{
+                width:
+                  "100%",
+                boxSizing:
+                  "border-box",
+                marginTop:
+                  "6px",
+                marginBottom:
+                  "15px",
+                padding:
+                  "10px",
+                border:
+                  "1px solid #ccc",
+                borderRadius:
+                  "8px"
+              }}
+            />
+
+            <label>
+              Description
+            </label>
+
+            <textarea
+              value={
+                postDescription
+              }
+              onChange={(event) =>
+                setPostDescription(
+                  event.target.value
+                )
+              }
+              maxLength={500}
+              rows={5}
+              placeholder="Tell people about your skin..."
+              style={{
+                width:
+                  "100%",
+                boxSizing:
+                  "border-box",
+                marginTop:
+                  "6px",
+                padding:
+                  "10px",
+                border:
+                  "1px solid #ccc",
+                borderRadius:
+                  "8px",
+                resize:
+                  "vertical"
+              }}
+            />
+
+            <div
+              style={{
+                display:
+                  "flex",
+                justifyContent:
+                  "flex-end",
+                gap:
+                  "10px",
+                marginTop:
+                  "20px"
+              }}
+            >
+              <button
+                onClick={() =>
+                  setPostModalSkin(
+                    null
+                  )
+                }
+                disabled={
+                  postingSkin !==
+                  null
+                }
+                style={{
+                  padding:
+                    "10px 15px",
+                  borderRadius:
+                    "8px",
+                  border:
+                    "1px solid #ccc",
+                  cursor:
+                    "pointer"
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={
+                  postSkin
+                }
+                disabled={
+                  postingSkin !==
+                  null
+                }
+                style={{
+                  padding:
+                    "10px 15px",
+                  borderRadius:
+                    "8px",
+                  border:
+                    "1px solid #111",
+                  background:
+                    "#111",
+                  color:
+                    "#fff",
+                  cursor:
+                    "pointer"
+                }}
+              >
+                {postingSkin
+                  ? "Posting..."
+                  : "Post Skin"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+                  }
+  
                  
