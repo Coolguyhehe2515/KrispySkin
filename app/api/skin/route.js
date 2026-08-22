@@ -4,10 +4,55 @@ import clientPromise from "../../../lib/mongodb";
 
 export const runtime = "nodejs";
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
 export async function POST(request) {
   try {
+    // Check login session
+    const sessionToken =
+      request.cookies.get("krispyskin_session")?.value;
+
+    if (!sessionToken) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "You must be logged in to upload a skin"
+        },
+        { status: 401 }
+      );
+    }
+
+    const client = await clientPromise;
+    const db = client.db("krispyskin");
+
+    const session = await db.collection("sessions").findOne({
+      token: sessionToken
+    });
+
+    if (!session || new Date(session.expiresAt) <= new Date()) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Your session has expired. Please login again."
+        },
+        { status: 401 }
+      );
+    }
+
+    const user = await db.collection("users").findOne({
+      id: session.userId
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User account not found"
+        },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -54,7 +99,6 @@ export async function POST(request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Verify PNG signature.
     const pngSignature = Buffer.from([
       0x89,
       0x50,
@@ -76,14 +120,12 @@ export async function POST(request) {
       );
     }
 
-    const skinId = `ks_${crypto.randomBytes(8).toString("hex")}`;
+    const skinId =
+      `ks_${crypto.randomBytes(8).toString("hex")}`;
 
-    const client = await clientPromise;
-    const db = client.db("krispyskin");
-    const skins = db.collection("skins");
-
-    await skins.insertOne({
+    await db.collection("skins").insertOne({
       id: skinId,
+      userId: user.id,
       filename: file.name,
       contentType: "image/png",
       size: file.size,
@@ -91,6 +133,19 @@ export async function POST(request) {
       model: "classic",
       createdAt: new Date()
     });
+
+    // Make this skin the user's active skin
+    await db.collection("users").updateOne(
+      {
+        id: user.id
+      },
+      {
+        $set: {
+          skinId: skinId,
+          updatedAt: new Date()
+        }
+      }
+    );
 
     return NextResponse.json(
       {
@@ -104,12 +159,15 @@ export async function POST(request) {
           size: file.size,
           model: "classic"
         },
-        message: "Skin uploaded and stored successfully"
+        message: "Skin uploaded successfully"
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error("KrispySkin skin upload error:", error);
+    console.error(
+      "KrispySkin skin upload error:",
+      error
+    );
 
     return NextResponse.json(
       {
