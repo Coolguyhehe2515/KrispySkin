@@ -1,54 +1,6 @@
-"use client";
-
-import { useState } from "react";
+import Link from "next/link";
 
 export default function Home() {
-  const [file, setFile] = useState(null);
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  async function uploadSkin() {
-    if (!file) {
-      setResult({
-        success: false,
-        error: "Pilih file PNG terlebih dahulu."
-      });
-      return;
-    }
-
-    if (file.type !== "image/png") {
-      setResult({
-        success: false,
-        error: "File harus berupa PNG."
-      });
-      return;
-    }
-
-    setLoading(true);
-    setResult(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/skin", {
-        method: "POST",
-        body: formData
-      });
-
-      const data = await response.json();
-
-      setResult(data);
-    } catch (error) {
-      setResult({
-        success: false,
-        error: "Gagal menghubungi KrispySkin API."
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <main
       style={{
@@ -63,7 +15,7 @@ export default function Home() {
       <div
         style={{
           width: "100%",
-          maxWidth: "500px",
+          maxWidth: "600px",
           textAlign: "center"
         }}
       >
@@ -75,56 +27,37 @@ export default function Home() {
 
         <div
           style={{
-            border: "2px dashed #888",
-            borderRadius: "12px",
-            padding: "30px",
+            display: "flex",
+            justifyContent: "center",
+            gap: "12px",
             marginTop: "25px"
           }}
         >
-          <input
-            type="file"
-            accept="image/png"
-            onChange={(event) => {
-              setFile(event.target.files?.[0] || null);
-              setResult(null);
-            }}
-          />
-
-          {file && (
-            <p>
-              Selected: <strong>{file.name}</strong>
-            </p>
-          )}
-
-          <button
-            onClick={uploadSkin}
-            disabled={!file || loading}
+          <Link
+            href="/login"
             style={{
-              marginTop: "15px",
-              padding: "10px 20px",
+              padding: "12px 24px",
+              border: "1px solid #ccc",
               borderRadius: "8px",
-              border: "none",
-              cursor: "pointer"
+              textDecoration: "none"
             }}
           >
-            {loading ? "Uploading..." : "Upload Skin"}
-          </button>
-        </div>
+            Login
+          </Link>
 
-        {result && (
-          <pre
+          <Link
+            href="/register"
             style={{
-              textAlign: "left",
-              marginTop: "25px",
-              padding: "15px",
-              borderRadius: "10px",
-              overflowX: "auto"
+              padding: "12px 24px",
+              border: "1px solid #ccc",
+              borderRadius: "8px",
+              textDecoration: "none"
             }}
           >
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        )}
+            Register
+          </Link>
+        </div>
       </div>
     </main>
   );
-              }
+}
