@@ -6,6 +6,21 @@ export default function CommunityPage() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [reportPostId, setReportPostId] =
+    useState(null);
+
+  const [reportReason, setReportReason] =
+    useState("");
+
+  const [reportDescription, setReportDescription] =
+    useState("");
+
+  const [otherReason, setOtherReason] =
+    useState("");
+
+  const [reporting, setReporting] =
+    useState(false);
+
   async function loadPosts() {
     try {
       const response = await fetch(
@@ -35,6 +50,101 @@ export default function CommunityPage() {
   useEffect(() => {
     loadPosts();
   }, []);
+
+  function openReportModal(postId) {
+    setReportPostId(postId);
+    setReportReason("");
+    setReportDescription("");
+    setOtherReason("");
+  }
+
+  function closeReportModal() {
+    if (reporting) {
+      return;
+    }
+
+    setReportPostId(null);
+    setReportReason("");
+    setReportDescription("");
+    setOtherReason("");
+  }
+
+  async function submitReport() {
+    if (!reportPostId) {
+      return;
+    }
+
+    if (!reportReason) {
+      alert(
+        "Please select a reason for the report."
+      );
+      return;
+    }
+
+    if (
+      reportReason === "other" &&
+      !otherReason.trim()
+    ) {
+      alert(
+        "Please explain the reason for this report."
+      );
+      return;
+    }
+
+    setReporting(true);
+
+    try {
+      const description =
+        reportReason === "other"
+          ? otherReason.trim()
+          : reportDescription.trim();
+
+      const response = await fetch(
+        "/api/reports",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            postId: reportPostId,
+            reason: reportReason,
+            description
+          })
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        alert(
+          data.error ||
+            "Failed to submit report."
+        );
+        return;
+      }
+
+      alert(
+        "Report submitted successfully. Thank you for helping keep KrispySkin safe."
+      );
+
+      closeReportModal();
+    } catch (error) {
+      console.error(
+        "Report error:",
+        error
+      );
+
+      alert(
+        "Failed to submit report."
+      );
+    } finally {
+      setReporting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -185,10 +295,29 @@ export default function CommunityPage() {
               >
                 Download Skin
               </a>
+
+              <button
+                onClick={() =>
+                  openReportModal(
+                    post.id
+                  )
+                }
+                style={{
+                  width: "100%",
+                  padding: "9px",
+                  marginTop: "8px",
+                  borderRadius: "8px",
+                  border:
+                    "1px solid #ccc",
+                  background:
+                    "#fff",
+                  cursor:
+                    "pointer"
+                }}
+              >
+                Report
+              </button>
             </article>
           ))}
         </div>
       )}
-    </main>
-  );
-      }
