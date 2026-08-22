@@ -1,80 +1,113 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { getDb } from "../../../../lib/mongodb";
+import clientPromise from "../../../../lib/mongodb";
+
+export const runtime = "nodejs";
 
 export async function POST(request) {
   try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get("krispy_session");
+    const sessionToken =
+      request.cookies.get("krispyskin_session")?.value;
 
-    if (!session) {
+    if (!sessionToken) {
       return NextResponse.json(
         {
-          error: "Not authenticated",
+          success: false,
+          error: "Not authenticated"
         },
         { status: 401 }
       );
     }
 
     const body = await request.json();
-    const skinId = body.skinId;
+    const skinId = body?.skinId;
 
     if (!skinId) {
       return NextResponse.json(
         {
-          error: "skinId is required",
+          success: false,
+          error: "skinId is required"
         },
         { status: 400 }
       );
     }
 
-    const db = await getDb();
+    const client = await clientPromise;
+    const db = client.db("krispyskin");
 
-    const user = await db.collection("users").findOne({
-      sessionToken: session.value,
+    const session = await db.collection("sessions").findOne({
+      token: sessionToken
     });
 
-    if (!user) {
+    if (
+      !session ||
+      new Date(session.expiresAt) <= new Date()
+    ) {
       return NextResponse.json(
         {
-          error: "Invalid session",
+          success: false,
+          error: "Session expired"
         },
         { status: 401 }
       );
     }
 
-    const skins = user.skins || [];
+    const user = await db.collection("users").findOne({
+      id: session.userId
+    });
 
-    if (!skins.includes(skinId)) {
+    if (!user) {
       return NextResponse.json(
         {
-          error: "Skin does not belong to this account",
+          success: false,
+          error: "User account not found"
         },
-        { status: 403 }
+        { status: 404 }
+      );
+    }
+
+    // Make sure this skin belongs to this user.
+    const skin = await db.collection("skins").findOne({
+      id: skinId,
+      userId: user.id
+    });
+
+    if (!skin) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Skin not found in your library"
+        },
+        { status: 404 }
       );
     }
 
     await db.collection("users").updateOne(
       {
-        _id: user._id,
+        id: user.id
       },
       {
         $set: {
-          skinId,
-        },
+          skinId: skinId,
+          updatedAt: new Date()
+        }
       }
     );
 
     return NextResponse.json({
       success: true,
       activeSkin: skinId,
+      message: "Skin loaded successfully"
     });
   } catch (error) {
-    console.error(error);
+    console.error(
+      "KrispySkin load skin error:",
+      error
+    );
 
     return NextResponse.json(
       {
-        error: "Failed to load skin",
+        success: false,
+        error: "Failed to load skin"
       },
       { status: 500 }
     );
