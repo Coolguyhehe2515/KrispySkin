@@ -1019,9 +1019,9 @@ export default function Dashboard() {
                         }}
                       >
                         {active
-
-                        ? "Active"
-                        : "Saved Skin"}
+                          
+                          <strong>
+                    {active ? "Active Skin" : "Saved Skin"}
                     </strong>
 
                     <div
