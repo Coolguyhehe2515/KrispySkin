@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import clientPromise from "@/lib/mongodb";
+import clientPromise from "../../../../../lib/mongodb";
 
 export const runtime = "nodejs";
 
@@ -31,7 +31,8 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error: "Username must be 3-20 characters and use only letters, numbers, or underscores"
+          error:
+            "Username must be 3-20 characters and use only letters, numbers, or underscores"
         },
         { status: 400 }
       );
@@ -91,7 +92,7 @@ export async function POST(request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Registration error:", error);
+    console.error("KrispySkin registration error:", error);
 
     return NextResponse.json(
       {
