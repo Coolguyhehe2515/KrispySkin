@@ -8,10 +8,7 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
 export async function POST(request) {
   try {
-    // ---------------------------------------------
-    // CHECK LOGIN SESSION
-    // ---------------------------------------------
-
+    // Check login session
     const sessionToken =
       request.cookies.get("krispyskin_session")?.value;
 
@@ -28,6 +25,7 @@ export async function POST(request) {
     const client = await clientPromise;
     const db = client.db("krispyskin");
 
+    // Find session
     const session = await db.collection("sessions").findOne({
       token: sessionToken
     });
@@ -46,10 +44,7 @@ export async function POST(request) {
       );
     }
 
-    // ---------------------------------------------
-    // FIND USER
-    // ---------------------------------------------
-
+    // Find user
     const user = await db.collection("users").findOne({
       id: session.userId
     });
@@ -64,10 +59,7 @@ export async function POST(request) {
       );
     }
 
-    // ---------------------------------------------
-    // READ FILE
-    // ---------------------------------------------
-
+    // Read uploaded file
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -91,10 +83,7 @@ export async function POST(request) {
       );
     }
 
-    // ---------------------------------------------
-    // VALIDATE PNG
-    // ---------------------------------------------
-
+    // Check MIME type
     if (file.type !== "image/png") {
       return NextResponse.json(
         {
@@ -105,6 +94,7 @@ export async function POST(request) {
       );
     }
 
+    // Check file size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
         {
@@ -116,9 +106,11 @@ export async function POST(request) {
       );
     }
 
+    // Convert file to Buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Validate PNG signature
     const pngSignature = Buffer.from([
       0x89,
       0x50,
@@ -143,17 +135,11 @@ export async function POST(request) {
       );
     }
 
-    // ---------------------------------------------
-    // GENERATE SKIN ID
-    // ---------------------------------------------
-
+    // Generate automatic skin ID
     const skinId =
       `ks_${crypto.randomBytes(8).toString("hex")}`;
 
-    // ---------------------------------------------
-    // SAVE SKIN
-    // ---------------------------------------------
-
+    // Save skin
     await db.collection("skins").insertOne({
       id: skinId,
       userId: user.id,
@@ -165,12 +151,8 @@ export async function POST(request) {
       createdAt: new Date()
     });
 
-    // ---------------------------------------------
-    // ADD TO USER SKIN LIBRARY
-    //
-    // $addToSet = don't duplicate the same ID
-    // ---------------------------------------------
-
+    // Add skin to user's library
+    // and make it the active skin
     await db.collection("users").updateOne(
       {
         id: user.id
@@ -186,16 +168,12 @@ export async function POST(request) {
       }
     );
 
-    // ---------------------------------------------
-    // RESPONSE
-    // ---------------------------------------------
-
+    // Response
     return NextResponse.json(
       {
         success: true,
         service: "KrispySkin",
         version: "0.1.0",
-
         skin: {
           id: skinId,
           filename: file.name,
@@ -203,7 +181,6 @@ export async function POST(request) {
           size: file.size,
           model: "classic"
         },
-
         message:
           "Skin uploaded and added to your skin library"
       },
@@ -223,4 +200,4 @@ export async function POST(request) {
       { status: 500 }
     );
   }
-},
+}
