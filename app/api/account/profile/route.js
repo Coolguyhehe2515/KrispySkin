@@ -8,7 +8,7 @@ const DEFAULT_PROFILE_PICTURE =
 
 async function getAuthenticatedUser(request) {
   const sessionToken =
-    request.cookies.get("krispy_skin")?.value;
+    request.cookies.get("krispyskin_session")?.value;
 
   if (!sessionToken) {
     return {
@@ -25,10 +25,9 @@ async function getAuthenticatedUser(request) {
   const client = await clientPromise;
   const db = client.db("krispyskin");
 
-  const session =
-    await db.collection("sessions").findOne({
-      token: sessionToken
-    });
+  const session = await db.collection("sessions").findOne({
+    token: sessionToken
+  });
 
   if (
     !session ||
@@ -45,10 +44,9 @@ async function getAuthenticatedUser(request) {
     };
   }
 
-  const user =
-    await db.collection("users").findOne({
-      id: session.userId
-    });
+  const user = await db.collection("users").findOne({
+    id: session.userId
+  });
 
   if (!user) {
     return {
@@ -70,8 +68,7 @@ async function getAuthenticatedUser(request) {
 
 export async function GET(request) {
   try {
-    const result =
-      await getAuthenticatedUser(request);
+    const result = await getAuthenticatedUser(request);
 
     if (result.error) {
       return result.error;
@@ -79,12 +76,10 @@ export async function GET(request) {
 
     return NextResponse.json({
       success: true,
-      profile: {
+      user: {
         id: result.user.id,
-        username:
-          result.user.username || "",
-        email:
-          result.user.email || "",
+        username: result.user.username || "",
+        email: result.user.email || "",
         emailVerified:
           result.user.emailVerified === true,
         profilePicture:
@@ -108,10 +103,9 @@ export async function GET(request) {
   }
 }
 
-export async function PATCH(request) {
+async function updateProfile(request) {
   try {
-    const result =
-      await getAuthenticatedUser(request);
+    const result = await getAuthenticatedUser(request);
 
     if (result.error) {
       return result.error;
@@ -119,17 +113,15 @@ export async function PATCH(request) {
 
     const body = await request.json();
 
-    const profilePicture =
-      String(
-        body.profilePicture || ""
-      ).trim();
+    const profilePicture = String(
+      body.profilePicture || ""
+    ).trim();
 
     if (!profilePicture) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Profile picture URL is required"
+          error: "Profile picture URL is required"
         },
         { status: 400 }
       );
@@ -139,8 +131,7 @@ export async function PATCH(request) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Profile picture URL is too long"
+          error: "Profile picture URL is too long"
         },
         { status: 400 }
       );
@@ -149,49 +140,51 @@ export async function PATCH(request) {
     let parsedUrl;
 
     try {
-      parsedUrl =
-        new URL(profilePicture);
+      parsedUrl = new URL(profilePicture);
     } catch {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Invalid profile picture URL"
+          error: "Invalid profile picture URL"
         },
         { status: 400 }
       );
     }
 
-    if (
-      parsedUrl.protocol !== "https:"
-    ) {
+    if (parsedUrl.protocol !== "https:") {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Profile picture must use HTTPS"
+          error: "Profile picture must use HTTPS"
         },
         { status: 400 }
       );
     }
 
-    await result.db
-      .collection("users")
-      .updateOne(
-        {
-          id: result.user.id
-        },
-        {
-          $set: {
-            profilePicture,
-            profilePictureUpdatedAt:
-              new Date()
-          }
+    await result.db.collection("users").updateOne(
+      {
+        id: result.user.id
+      },
+      {
+        $set: {
+          profilePicture,
+          profilePictureUpdatedAt: new Date()
         }
-      );
+      }
+    );
+
+    const updatedUser = {
+      id: result.user.id,
+      username: result.user.username || "",
+      email: result.user.email || "",
+      emailVerified:
+        result.user.emailVerified === true,
+      profilePicture
+    };
 
     return NextResponse.json({
       success: true,
+      user: updatedUser,
       profilePicture
     });
   } catch (error) {
@@ -203,10 +196,17 @@ export async function PATCH(request) {
     return NextResponse.json(
       {
         success: false,
-        error:
-          "Failed to update profile"
+        error: "Failed to update profile"
       },
       { status: 500 }
     );
   }
+}
+
+export async function POST(request) {
+  return updateProfile(request);
+}
+
+export async function PATCH(request) {
+  return updateProfile(request);
 }
