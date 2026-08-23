@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export async function GET(request) {
   try {
     const token =
-      request.cookies.get("krispyskin_session")?.value;
+      request.cookies.get("krispy_skin_session")?.value;
 
     if (!token) {
       return NextResponse.json(
