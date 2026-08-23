@@ -9,20 +9,28 @@ export default function AccountSettings() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const [activeSection, setActiveSection] = useState("profile");
+  const [activeSection, setActiveSection] =
+    useState("profile");
 
   const [username, setUsername] = useState("");
-  const [usernameLoading, setUsernameLoading] = useState(false);
+  const [usernameLoading, setUsernameLoading] =
+    useState(false);
 
   const [email, setEmail] = useState("");
-  const [emailLoading, setEmailLoading] = useState(false);
   const [emailCode, setEmailCode] = useState("");
-  const [emailStep, setEmailStep] = useState("email");
+  const [emailStep, setEmailStep] =
+    useState("email");
+  const [emailLoading, setEmailLoading] =
+    useState(false);
 
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [currentPassword, setCurrentPassword] =
+    useState("");
+  const [newPassword, setNewPassword] =
+    useState("");
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
+  const [passwordLoading, setPasswordLoading] =
+    useState(false);
 
   const [theme, setTheme] = useState("system");
 
@@ -30,39 +38,56 @@ export default function AccountSettings() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    async function loadUser() {
+    async function loadAccount() {
       try {
-        const response = await fetch("/api/auth/me", {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store"
-        });
+        const response = await fetch(
+          "/api/auth/me",
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store"
+          }
+        );
 
         const data = await response.json();
 
-        if (!response.ok || !data.authenticated) {
+        if (
+          !response.ok ||
+          !data.authenticated
+        ) {
           router.replace("/login");
           return;
         }
 
         setUser(data.user);
-        setUsername(data.user?.username || "");
-        setEmail(data.user?.email || "");
+        setUsername(
+          data.user?.username || ""
+        );
+        setEmail(
+          data.user?.email || ""
+        );
       } catch (err) {
-        console.error("Account settings error:", err);
-        setError("Failed to load account information.");
+        console.error(
+          "Account settings error:",
+          err
+        );
+
+        setError(
+          "Failed to load account information."
+        );
       } finally {
         setLoading(false);
       }
     }
 
-    loadUser();
+    loadAccount();
   }, [router]);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem(
-      "krispyskin_theme"
-    );
+    const savedTheme =
+      localStorage.getItem(
+        "krispyskin_theme"
+      );
 
     if (
       savedTheme === "light" ||
@@ -75,22 +100,27 @@ export default function AccountSettings() {
   }, []);
 
   function applyTheme(value) {
-    const root = document.documentElement;
-
     if (value === "system") {
-      root.removeAttribute("data-theme");
+      document.documentElement.removeAttribute(
+        "data-theme"
+      );
       return;
     }
 
-    root.setAttribute("data-theme", value);
+    document.documentElement.setAttribute(
+      "data-theme",
+      value
+    );
   }
 
   function changeTheme(value) {
     setTheme(value);
+
     localStorage.setItem(
       "krispyskin_theme",
       value
     );
+
     applyTheme(value);
   }
 
@@ -105,7 +135,9 @@ export default function AccountSettings() {
     clearMessages();
 
     if (!username.trim()) {
-      setError("Username is required.");
+      setError(
+        "Username is required."
+      );
       return;
     }
 
@@ -118,7 +150,8 @@ export default function AccountSettings() {
           method: "POST",
           credentials: "include",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type":
+              "application/json"
           },
           body: JSON.stringify({
             username: username.trim()
@@ -126,7 +159,8 @@ export default function AccountSettings() {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         setError(
@@ -136,12 +170,12 @@ export default function AccountSettings() {
         return;
       }
 
+      setUsername(data.username);
+
       setUser((oldUser) => ({
         ...oldUser,
         username: data.username
       }));
-
-      setUsername(data.username);
 
       setMessage(
         "Username changed successfully."
@@ -160,13 +194,17 @@ export default function AccountSettings() {
     }
   }
 
-  async function sendEmailVerification(event) {
+  async function sendEmailVerification(
+    event
+  ) {
     event.preventDefault();
 
     clearMessages();
 
     if (!email.trim()) {
-      setError("Email is required.");
+      setError(
+        "Email is required."
+      );
       return;
     }
 
@@ -179,7 +217,8 @@ export default function AccountSettings() {
           method: "POST",
           credentials: "include",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type":
+              "application/json"
           },
           body: JSON.stringify({
             email: email.trim()
@@ -187,7 +226,8 @@ export default function AccountSettings() {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         setError(
@@ -237,7 +277,8 @@ export default function AccountSettings() {
           method: "POST",
           credentials: "include",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type":
+              "application/json"
           },
           body: JSON.stringify({
             email: email.trim(),
@@ -246,7 +287,8 @@ export default function AccountSettings() {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         setError(
@@ -256,14 +298,15 @@ export default function AccountSettings() {
         return;
       }
 
+      const verifiedEmail =
+        data.email || email.trim();
+
+      setEmail(verifiedEmail);
+
       setUser((oldUser) => ({
         ...oldUser,
-        email: data.email || email
+        email: verifiedEmail
       }));
-
-      setEmail(
-        data.email || email
-      );
 
       setEmailCode("");
       setEmailStep("email");
@@ -284,6 +327,7 @@ export default function AccountSettings() {
       setEmailLoading(false);
     }
   }
+
 
   async function changePassword(event) {
     event.preventDefault();
@@ -308,6 +352,13 @@ export default function AccountSettings() {
       return;
     }
 
+    if (newPassword.length < 8) {
+      setError(
+        "Password must be at least 8 characters."
+      );
+      return;
+    }
+
     setPasswordLoading(true);
 
     try {
@@ -317,7 +368,8 @@ export default function AccountSettings() {
           method: "POST",
           credentials: "include",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type":
+              "application/json"
           },
           body: JSON.stringify({
             currentPassword,
@@ -327,7 +379,8 @@ export default function AccountSettings() {
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         setError(
@@ -362,18 +415,26 @@ export default function AccountSettings() {
     }
   }
 
+  function switchSection(section) {
+    clearMessages();
+    setActiveSection(section);
+  }
+
   if (loading) {
     return (
       <main
         style={{
           minHeight: "100vh",
           display: "flex",
-          justifyContent: "center",
           alignItems: "center",
-          fontFamily: "Arial, sans-serif"
+          justifyContent: "center",
+          fontFamily:
+            "Arial, sans-serif"
         }}
       >
-        <h1>Loading account settings...</h1>
+        <h1>
+          Loading account settings...
+        </h1>
       </main>
     );
   }
@@ -383,12 +444,12 @@ export default function AccountSettings() {
       style={{
         minHeight: "100vh",
         padding: "30px",
-        boxSizing: "border-box",
-        fontFamily: "Arial, sans-serif",
+        fontFamily:
+          "Arial, sans-serif",
         background:
-          "var(--background, #f5f5f5)",
+          "var(--background, #ffffff)",
         color:
-          "var(--foreground, #111)"
+          "var(--foreground, #111111)"
       }}
     >
       <div
@@ -403,35 +464,45 @@ export default function AccountSettings() {
             router.push("/dashboard")
           }
           style={{
-            padding: "10px 16px",
+            padding: "9px 15px",
             borderRadius: "8px",
-            border: "1px solid #ccc",
-            background: "#fff",
+            border:
+              "1px solid #ccc",
+            background:
+              "transparent",
             cursor: "pointer",
             marginBottom: "20px"
           }}
         >
-          Back to Dashboard
+          ← Back to Dashboard
         </button>
 
-        <h1>Account Settings</h1>
+        <h1>
+          Account Settings
+        </h1>
 
         <p
           style={{
             color: "#666"
           }}
         >
-          Manage your KrispySkin account.
+          Manage your KrispySkin account,
+          profile, security, and theme.
         </p>
 
         {message && (
           <div
             style={{
-              marginTop: "20px",
               padding: "12px 15px",
+              marginTop: "20px",
+              marginBottom: "15px",
               borderRadius: "8px",
-              background: "#e9ffe9",
-              border: "1px solid #9bd49b"
+              background:
+                "#e8f7e8",
+              border:
+                "1px solid #9bd39b",
+              color:
+                "#216b21"
             }}
           >
             {message}
@@ -441,11 +512,16 @@ export default function AccountSettings() {
         {error && (
           <div
             style={{
-              marginTop: "20px",
               padding: "12px 15px",
+              marginTop: "20px",
+              marginBottom: "15px",
               borderRadius: "8px",
-              background: "#ffe9e9",
-              border: "1px solid #d49b9b"
+              background:
+                "#ffecec",
+              border:
+                "1px solid #e0a0a0",
+              color:
+                "#9b2222"
             }}
           >
             {error}
@@ -456,26 +532,25 @@ export default function AccountSettings() {
           style={{
             display: "grid",
             gridTemplateColumns:
-              "220px minmax(0, 1fr)",
+              "220px 1fr",
             gap: "25px",
-            marginTop: "30px",
-            alignItems: "start"
+            marginTop: "30px"
           }}
         >
           <aside
             style={{
-              background: "#fff",
-              border: "1px solid #ddd",
+              border:
+                "1px solid #ddd",
               borderRadius: "12px",
-              padding: "10px"
+              padding: "10px",
+              height: "fit-content"
             }}
           >
             <button
               type="button"
-              onClick={() => {
-                clearMessages();
-                setActiveSection("profile");
-              }}
+              onClick={() =>
+                switchSection("profile")
+              }
               style={{
                 width: "100%",
                 padding: "12px",
@@ -483,13 +558,15 @@ export default function AccountSettings() {
                 border: "none",
                 borderRadius: "8px",
                 background:
-                  activeSection === "profile"
+                  activeSection ===
+                  "profile"
                     ? "#111"
                     : "transparent",
                 color:
-                  activeSection === "profile"
+                  activeSection ===
+                  "profile"
                     ? "#fff"
-                    : "#111",
+                    : "inherit",
                 cursor: "pointer"
               }}
             >
@@ -498,10 +575,9 @@ export default function AccountSettings() {
 
             <button
               type="button"
-              onClick={() => {
-                clearMessages();
-                setActiveSection("security");
-              }}
+              onClick={() =>
+                switchSection("security")
+              }
               style={{
                 width: "100%",
                 padding: "12px",
@@ -509,13 +585,15 @@ export default function AccountSettings() {
                 border: "none",
                 borderRadius: "8px",
                 background:
-                  activeSection === "security"
+                  activeSection ===
+                  "security"
                     ? "#111"
                     : "transparent",
                 color:
-                  activeSection === "security"
+                  activeSection ===
+                  "security"
                     ? "#fff"
-                    : "#111",
+                    : "inherit",
                 cursor: "pointer"
               }}
             >
@@ -524,10 +602,9 @@ export default function AccountSettings() {
 
             <button
               type="button"
-              onClick={() => {
-                clearMessages();
-                setActiveSection("theme");
-              }}
+              onClick={() =>
+                switchSection("theme")
+              }
               style={{
                 width: "100%",
                 padding: "12px",
@@ -535,13 +612,15 @@ export default function AccountSettings() {
                 border: "none",
                 borderRadius: "8px",
                 background:
-                  activeSection === "theme"
+                  activeSection ===
+                  "theme"
                     ? "#111"
                     : "transparent",
                 color:
-                  activeSection === "theme"
+                  activeSection ===
+                  "theme"
                     ? "#fff"
-                    : "#111",
+                    : "inherit",
                 cursor: "pointer"
               }}
             >
@@ -551,71 +630,43 @@ export default function AccountSettings() {
 
           <section
             style={{
-              background: "#fff",
-              border: "1px solid #ddd",
+              border:
+                "1px solid #ddd",
               borderRadius: "12px",
               padding: "25px"
             }}
           >
-            {activeSection === "profile" && (
+            {activeSection ===
+              "profile" && (
               <>
-                <h2>Profile</h2>
+                <h2>
+                  Profile
+                </h2>
 
                 <p
                   style={{
                     color: "#666"
                   }}
                 >
-                  Manage your public account
+                  Update your public
+                  KrispySkin profile
                   information.
                 </p>
 
-                <div
-                  style={{
-                    marginTop: "25px",
-                    padding: "20px",
-                    border: "1px solid #ddd",
-                    borderRadius: "12px"
-                  }}
-                >
-                  <h3>Account Information</h3>
-
-                  <p>
-                    <strong>User ID:</strong>{" "}
-                    {user?.id || "Unknown"}
-                  </p>
-
-                  <p>
-                    <strong>Current username:</strong>{" "}
-                    {user?.username || "Unknown"}
-                  </p>
-
-                  <p>
-                    <strong>Email:</strong>{" "}
-                    {user?.email || "Not set"}
-                  </p>
-                </div>
-
                 <form
-                  onSubmit={changeUsername}
+                  onSubmit={
+                    changeUsername
+                  }
                   style={{
-                    marginTop: "25px"
+                    marginTop:
+                      "25px"
                   }}
                 >
-                  <h3>Change Username</h3>
-
-                  <label
-                    htmlFor="username"
-                    style={{
-                      display: "block",
-                      marginBottom: "6px"
-                    }}
-                  >
+                  <label>
                     Username
                   </label>
 
                   <input
-                    id="username"
                     type="text"
                     value={username}
                     onChange={(event) =>
@@ -623,41 +674,47 @@ export default function AccountSettings() {
                         event.target.value
                       )
                     }
-                    minLength={3}
                     maxLength={24}
                     autoComplete="username"
                     style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "11px",
-                      border: "1px solid #ccc",
-                      borderRadius: "8px"
+                      display:
+                        "block",
+                      width:
+                        "100%",
+                      maxWidth:
+                        "500px",
+                      boxSizing:
+                        "border-box",
+                      marginTop:
+                        "7px",
+                      padding:
+                        "11px",
+                      border:
+                        "1px solid #ccc",
+                      borderRadius:
+                        "8px"
                     }}
                   />
 
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      color: "#777"
-                    }}
-                  >
-                    3-24 characters. Letters,
-                    numbers, and underscores only.
-                  </p>
-
                   <button
                     type="submit"
-                    disabled={usernameLoading}
+                    disabled={
+                      usernameLoading
+                    }
                     style={{
-                      marginTop: "8px",
-                      padding: "11px 18px",
-                      borderRadius: "8px",
+                      marginTop:
+                        "12px",
+                      padding:
+                        "10px 18px",
+                      borderRadius:
+                        "8px",
                       border: "none",
-                      background: "#111",
-                      color: "#fff",
-                      cursor: usernameLoading
-                        ? "not-allowed"
-                        : "pointer"
+                      background:
+                        "#111",
+                      color:
+                        "#fff",
+                      cursor:
+                        "pointer"
                     }}
                   >
                     {usernameLoading
@@ -666,144 +723,356 @@ export default function AccountSettings() {
                   </button>
                 </form>
 
-                <form
-                  onSubmit={sendEmailVerification}
+                <hr
                   style={{
-                    marginTop: "35px"
+                    margin:
+                      "30px 0",
+                    border: 0,
+                    borderTop:
+                      "1px solid #ddd"
                   }}
+                />
+
+                <form
+                  onSubmit={
+                    emailStep ===
+                    "email"
+                      ? sendEmailVerification
+                      : verifyEmail
+                  }
                 >
-                  <h3>Email Address</h3>
-
-                  <p
-                    style={{
-                      color: "#666"
-                    }}
-                  >
-                    Changing your email address
-                    requires verification.
-                  </p>
-
-                  <label
-                    htmlFor="email"
-                    style={{
-                      display: "block",
-                      marginBottom: "6px"
-                    }}
-                  >
-                    Email
+                  <label>
+                    Email Address
                   </label>
 
                   <input
-                    id="email"
                     type="email"
                     value={email}
+                    disabled={
+                      emailStep ===
+                      "code"
+                    }
                     onChange={(event) =>
                       setEmail(
                         event.target.value
                       )
                     }
                     autoComplete="email"
-                    disabled={
-                      emailStep === "code"
-                    }
                     style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "11px",
-                      border: "1px solid #ccc",
-                      borderRadius: "8px"
+                      display:
+                        "block",
+                      width:
+                        "100%",
+                      maxWidth:
+                        "500px",
+                      boxSizing:
+                        "border-box",
+                      marginTop:
+                        "7px",
+                      padding:
+                        "11px",
+                      border:
+                        "1px solid #ccc",
+                      borderRadius:
+                        "8px"
                     }}
                   />
 
-                  {emailStep === "email" && (
+                  {emailStep ===
+                    "email" ? (
                     <button
                       type="submit"
-                      disabled={emailLoading}
+                      disabled={
+                        emailLoading
+                      }
                       style={{
-                        marginTop: "12px",
-                        padding: "11px 18px",
-                        borderRadius: "8px",
-                        border: "none",
-                        background: "#111",
-                        color: "#fff",
-                        cursor: emailLoading
-                          ? "not-allowed"
-                          : "pointer"
+                        marginTop:
+                          "12px",
+                        padding:
+                          "10px 18px",
+                        borderRadius:
+                          "8px",
+                        border:
+                          "none",
+                        background:
+                          "#111",
+                        color:
+                          "#fff",
+                        cursor:
+                          "pointer"
                       }}
                     >
                       {emailLoading
                         ? "Sending..."
                         : "Send Verification Code"}
                     </button>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={
+                          emailCode
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setEmailCode(
+                            event.target
+                              .value
+                          )
+                        }
+                        maxLength={6}
+                        inputMode="numeric"
+                        placeholder="Enter 6-digit code"
+                        autoComplete="one-time-code"
+                        style={{
+                          display:
+                            "block",
+                          width:
+                            "100%",
+                          maxWidth:
+                            "500px",
+                          boxSizing:
+                            "border-box",
+                          marginTop:
+                            "12px",
+                          padding:
+                            "11px",
+                          border:
+                            "1px solid #ccc",
+                          borderRadius:
+                            "8px"
+                        }}
+                      />
+
+                      <div
+                        style={{
+                          display:
+                            "flex",
+                          gap: "10px",
+                          flexWrap:
+                            "wrap",
+                          marginTop:
+                            "12px"
+                        }}
+                      >
+                        <button
+                          type="submit"
+                          disabled={
+                            emailLoading
+                          }
+                          style={{
+                            padding:
+                              "10px 18px",
+                            borderRadius:
+                              "8px",
+                            border:
+                              "none",
+                            background:
+                              "#111",
+                            color:
+                              "#fff",
+                            cursor:
+                              "pointer"
+                          }}
+                        >
+                          {emailLoading
+                            ? "Verifying..."
+                            : "Verify Email"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmailStep(
+                              "email"
+                            );
+                            setEmailCode(
+                              ""
+                            );
+                            clearMessages();
+                          }}
+                          style={{
+                            padding:
+                              "10px 18px",
+                            borderRadius:
+                              "8px",
+                            border:
+                              "1px solid #ccc",
+                            background:
+                              "transparent",
+                            cursor:
+                              "pointer"
+                          }}
+                        >
+                          Change Email
+                        </button>
+                      </div>
+                    </>
                   )}
                 </form>
+              </>
+            )}
 
-                {emailStep === "code" && (
-                  <form
-                    onSubmit={verifyEmail}
+            {activeSection ===
+              "security" && (
+              <>
+                <h2>
+                  Security
+                </h2>
+
+                <p
+                  style={{
+                    color: "#666"
+                  }}
+                >
+                  Change your account
+                  password.
+                </p>
+
+                <form
+                  onSubmit={
+                    changePassword
+                  }
+                  style={{
+                    marginTop:
+                      "25px"
+                  }}
+                >
+                  <label>
+                    Current Password
+                  </label>
+
+                  <input
+                    type="password"
+                    value={
+                      currentPassword
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setCurrentPassword(
+                        event.target
+                          .value
+                      )
+                    }
+                    autoComplete="current-password"
                     style={{
-                      marginTop: "20px",
-                      padding: "20px",
-                      border: "1px solid #ddd",
-                      borderRadius: "10px"
+                      display:
+                        "block",
+                      width:
+                        "100%",
+                      maxWidth:
+                        "500px",
+                      boxSizing:
+                        "border-box",
+                      marginTop:
+                        "7px",
+                      padding:
+                        "11px",
+                      border:
+                        "1px solid #ccc",
+                      borderRadius:
+                        "8px"
+                    }}
+                  />
+
+                  <label
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "15px"
                     }}
                   >
-                    <h3>
-                      Verify Your Email
-                    </h3>
+                    New Password
+                  </label>
 
-                    <p
-                      style={{
-                        color: "#666"
-                      }}
-                    >
-                      Enter the verification
-                      code sent to your email.
-                    </p>
+                  <input
+                    type="password"
+                    value={
+                      newPassword
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setNewPassword(
+                        event.target
+                          .value
+                      )
+                    }
+                    autoComplete="new-password"
+                    style={{
+                      display:
+                        "block",
+                      width:
+                        "100%",
+                      maxWidth:
+                        "500px",
+                      boxSizing:
+                        "border-box",
+                      marginTop:
+                        "7px",
+                      padding:
+                        "11px",
+                      border:
+                        "1px solid #ccc",
+                      borderRadius:
+                        "8px"
+                    }}
+                  />
 
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={emailCode}
-                      onChange={(event) =>
-                        setEmailCode(
-                          event.target.value
-                        )
-                      }
-                      maxLength={6}
-                      placeholder="123456"
-                      autoComplete="one-time-code"
-                      style={{
-                        width: "100%",
-                        boxSizing: "border-box",
-                        padding: "11px",
-                        border: "1px solid #ccc",
-                        borderRadius: "8px",
-                        letterSpacing: "5px"
-                      }}
-                    />
+                  <label
+                    style={{
+                      display:
+                        "block",
+                      marginTop:
+                        "15px"
+                    }}
+                  >
+                    Confirm New Password
+                  </label>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "10px",
-                        marginTop: "12px"
-                      }}
-                    >
-                      <button
-                        type="submit"
-                        disabled={emailLoading}
-                        style={{
-                          padding:
-                            "11px 18px",
-                          borderRadius: "8px",
-                          border: "none",
-                          background: "#111",
-                          color: "#fff",
-                          cursor:
-                            emailLoading
+                  <input
+                    type="password"
+                    value={
+                      confirmPassword
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setConfirmPassword(
+                        event.target
+                          .value
+                      )
+                    }
+                    autoComplete="new-password"
+                    style={{
+                      display:
+                        "block",
+                      width:
+                        "100%",
+                      maxWidth:
+                        "500px",
+                      boxSizing:
+                        "border-box",
+                      marginTop:
+                        "7px",
+                      padding:
+                        "11px",
+                      border:
+                        "1px solid #ccc",
+                      borderRadius:
+                        "8px"
+                    }}
+                  />
 
-                                        {activeSection === "theme" && (
+                  <button
+                    type="submit"
+                    disabled={
+
+
+                                  {activeSection === "theme" && (
               <>
                 <h2>Theme</h2>
 
@@ -818,42 +1087,74 @@ export default function AccountSettings() {
 
                 <div
                   style={{
-                    display: "grid",
-                    gap: "12px",
-                    marginTop: "25px"
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                    marginTop: "25px",
+                    maxWidth: "500px"
                   }}
                 >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      changeTheme("system")
+                    }
+                    style={{
+                      padding: "14px",
+                      textAlign: "left",
+                      borderRadius: "10px",
+                      border:
+                        theme === "system"
+                          ? "2px solid #111"
+                          : "1px solid #ccc",
+                      background:
+                        "transparent",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <strong>System</strong>
+
+                    <div
+                      style={{
+                        marginTop: "4px",
+                        fontSize: "13px",
+                        color: "#666"
+                      }}
+                    >
+                      Follow your device's
+                      light or dark mode.
+                    </div>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() =>
                       changeTheme("light")
                     }
                     style={{
-                      padding: "18px",
+                      padding: "14px",
                       textAlign: "left",
                       borderRadius: "10px",
                       border:
                         theme === "light"
                           ? "2px solid #111"
                           : "1px solid #ccc",
-                      background: "#fff",
+                      background:
+                        "#fff",
                       color: "#111",
                       cursor: "pointer"
                     }}
                   >
-                    <strong>
-                      Light
-                    </strong>
+                    <strong>Light</strong>
 
                     <div
                       style={{
-                        marginTop: "5px",
+                        marginTop: "4px",
                         fontSize: "13px",
                         color: "#666"
                       }}
                     >
-                      Always use the light
-                      theme.
+                      Use the light theme.
                     </div>
                   </button>
 
@@ -863,85 +1164,31 @@ export default function AccountSettings() {
                       changeTheme("dark")
                     }
                     style={{
-                      padding: "18px",
+                      padding: "14px",
                       textAlign: "left",
                       borderRadius: "10px",
                       border:
                         theme === "dark"
                           ? "2px solid #111"
-                          : "1px solid #ccc",
-                      background: "#222",
+                          : "1px solid #555",
+                      background:
+                        "#181818",
                       color: "#fff",
                       cursor: "pointer"
                     }}
                   >
-                    <strong>
-                      Dark
-                    </strong>
+                    <strong>Dark</strong>
 
                     <div
                       style={{
-                        marginTop: "5px",
+                        marginTop: "4px",
                         fontSize: "13px",
-                        color: "#bbb"
+                        color: "#aaa"
                       }}
                     >
-                      Always use the dark
-                      theme.
+                      Use the dark theme.
                     </div>
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changeTheme("system")
-                    }
-                    style={{
-                      padding: "18px",
-                      textAlign: "left",
-                      borderRadius: "10px",
-                      border:
-                        theme === "system"
-                          ? "2px solid #111"
-                          : "1px solid #ccc",
-                      background:
-                        "linear-gradient(90deg, #fff 50%, #222 50%)",
-                      color:
-                        theme === "system"
-                          ? "#111"
-                          : "#fff",
-                      cursor: "pointer"
-                    }}
-                  >
-                    <strong>
-                      System
-                    </strong>
-
-                    <div
-                      style={{
-                        marginTop: "5px",
-                        fontSize: "13px"
-                      }}
-                    >
-                      Follow your device
-                      theme.
-                    </div>
-                  </button>
-                </div>
-
-                <div
-                  style={{
-                    marginTop: "30px",
-                    padding: "15px",
-                    borderRadius: "10px",
-                    background: "#f5f5f5",
-                    border: "1px solid #ddd"
-                  }}
-                >
-                  Current theme:{" "}
-                  <strong>
-                    {theme}
-                  </strong>
                 </div>
               </>
             )}
@@ -950,5 +1197,5 @@ export default function AccountSettings() {
       </div>
     </main>
   );
-                        }
-          
+}
+                  
