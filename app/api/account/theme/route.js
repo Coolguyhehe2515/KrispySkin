@@ -3,21 +3,110 @@ import clientPromise from "../../../../lib/mongodb";
 
 export const runtime = "nodejs";
 
-export async function POST(request) {
-  try {
-    const sessionToken =
-      request.cookies.get(
-        "krispyskin_session"
-      )?.value;
+const ALLOWED_THEMES = [
+  "system",
+  "light",
+  "dark"
+];
 
-    if (!sessionToken) {
-      return NextResponse.json(
+async function getAuthenticatedUser(request) {
+  const sessionToken =
+    request.cookies.get("krispy_skin")?.value;
+
+  if (!sessionToken) {
+    return {
+      error: NextResponse.json(
         {
           success: false,
           error: "You must be logged in"
         },
         { status: 401 }
-      );
+      )
+    };
+  }
+
+  const client = await clientPromise;
+  const db = client.db("krispyskin");
+
+  const session =
+    await db.collection("sessions").findOne({
+      token: sessionToken
+    });
+
+  if (
+    !session ||
+    new Date(session.expiresAt) <= new Date()
+  ) {
+    return {
+      error: NextResponse.json(
+        {
+          success: false,
+          error: "Session expired"
+        },
+        { status: 401 }
+      )
+    };
+  }
+
+  const user =
+    await db.collection("users").findOne({
+      id: session.userId
+    });
+
+  if (!user) {
+    return {
+      error: NextResponse.json(
+        {
+          success: false,
+          error: "User not found"
+        },
+        { status: 404 }
+      )
+    };
+  }
+
+  return {
+    db,
+    user
+  };
+}
+
+export async function GET(request) {
+  try {
+    const result =
+      await getAuthenticatedUser(request);
+
+    if (result.error) {
+      return result.error;
+    }
+
+    return NextResponse.json({
+      success: true,
+      theme: result.user.theme || "system"
+    });
+  } catch (error) {
+    console.error(
+      "Theme fetch error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to load theme"
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request) {
+  try {
+    const result =
+      await getAuthenticatedUser(request);
+
+    if (result.error) {
+      return result.error;
     }
 
     const body = await request.json();
@@ -27,73 +116,33 @@ export async function POST(request) {
         .trim()
         .toLowerCase();
 
-    const allowedThemes = [
-      "system",
-      "light",
-      "dark"
-    ];
-
-    if (
-      !allowedThemes.includes(theme)
-    ) {
+    if (!ALLOWED_THEMES.includes(theme)) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Theme must be system, light, or dark"
+          error: "Invalid theme"
         },
         { status: 400 }
       );
     }
 
-    const client = await clientPromise;
-    const db = client.db("krispyskin");
-
-    const session =
-      await db.collection("sessions").findOne({
-        token: sessionToken
-      });
-
-    if (
-      !session ||
-      new Date(session.expiresAt) <= new Date()
-    ) {
-      return NextResponse.json(
+    await result.db
+      .collection("users")
+      .updateOne(
         {
-          success: false,
-          error: "Session expired"
-        },
-        { status: 401 }
-      );
-    }
-
-    const result =
-      await db.collection("users").updateOne(
-        {
-          id: session.userId
+          id: result.user.id
         },
         {
           $set: {
             theme,
-            updatedAt: new Date()
+            themeUpdatedAt: new Date()
           }
         }
       );
 
-    if (result.matchedCount === 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "User not found"
-        },
-        { status: 404 }
-      );
-    }
-
     return NextResponse.json({
       success: true,
-      theme,
-      message: "Theme updated successfully"
+      theme
     });
   } catch (error) {
     console.error(
@@ -109,4 +158,4 @@ export async function POST(request) {
       { status: 500 }
     );
   }
-  }
+}
