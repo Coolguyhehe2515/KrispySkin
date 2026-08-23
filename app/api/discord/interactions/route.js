@@ -7,6 +7,17 @@ export const runtime = "nodejs";
 const DISCORD_PUBLIC_KEY =
   process.env.DISCORD_PUBLIC_KEY;
 
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "https://krispy-skin.vercel.app";
+
+const MODERATION_SECRET =
+  process.env.DISCORD_MODERATION_SECRET;
+
+// --------------------------------------------------
+// DISCORD REQUEST SIGNATURE VERIFICATION
+// --------------------------------------------------
+
 function verifyDiscordRequest(
   body,
   signature,
@@ -21,10 +32,9 @@ function verifyDiscordRequest(
   }
 
   try {
-    const message =
-      Buffer.from(
-        timestamp + body
-      );
+    const message = Buffer.from(
+      timestamp + body
+    );
 
     const signatureBuffer =
       Buffer.from(
@@ -38,6 +48,7 @@ function verifyDiscordRequest(
         "hex"
       );
 
+    // Ed25519 public key in SPKI DER format.
     const spkiPrefix =
       Buffer.from(
         "302a300506032b6570032100",
@@ -70,7 +81,11 @@ function verifyDiscordRequest(
   }
 }
 
-function jsonResponse(
+// --------------------------------------------------
+// DISCORD RESPONSE HELPER
+// --------------------------------------------------
+
+function discordResponse(
   data,
   status = 200
 ) {
@@ -82,172 +97,35 @@ function jsonResponse(
   );
 }
 
-function ephemeralMessage(
-  content
-) {
-  return {
-    type: 4,
-    data: {
-      content,
-      flags: 64
-    }
-  };
-}
+// --------------------------------------------------
+// DATABASE HELPERS
+// --------------------------------------------------
 
-function parseModerationAction(
-  customId
-) {
-  if (!customId) {
-    return null;
-  }
+async function getPost(postId) {
+  const client =
+    await clientPromise;
 
-  const value =
-    String(customId).trim();
+  const db =
+    client.db("krispyskin");
 
-  // -------------------------------
-  // DISMISS
-  // -------------------------------
+  const post =
+    await db
+      .collection("posts")
+      .findOne({
+        id: postId
+      });
 
-  if (
-    value === "report_dismiss" ||
-    value === "dismiss" ||
-    value === "report:dismiss"
-  ) {
+  if (!post) {
     return {
-      action: "dismiss",
-      postId: null
+      db,
+      post: null
     };
   }
 
-  // -------------------------------
-  // HIDE
-  // -------------------------------
-
-  const hidePrefixes = [
-    "report_hide:",
-    "report_hide_post:",
-    "hide:",
-    "hide_post:",
-    "report:hide:"
-  ];
-
-  for (
-    const prefix of hidePrefixes
-  ) {
-    if (
-      value.startsWith(prefix)
-    ) {
-      return {
-        action: "hide",
-        postId:
-          value.substring(
-            prefix.length
-          )
-      };
-    }
-  }
-
-  // -------------------------------
-  // DELETE
-  // -------------------------------
-
-  const deletePrefixes = [
-    "report_delete:",
-    "report_delete_post:",
-    "delete:",
-    "delete_post:",
-    "report:delete:"
-  ];
-
-  for (
-    const prefix of deletePrefixes
-  ) {
-    if (
-      value.startsWith(prefix)
-    ) {
-      return {
-        action: "delete",
-        postId:
-          value.substring(
-            prefix.length
-          )
-      };
-    }
-  }
-
-  return null;
-}
-
-function isModerator(
-  interaction
-) {
-  const requiredRole =
-    process.env.DISCORD_MODERATOR_ROLE_ID;
-
-  if (!requiredRole) {
-    return true;
-  }
-
-  const roles =
-    interaction.member?.roles || [];
-
-  return roles.includes(
-    requiredRole
-  );
-}
-
-// --------------------------------------------------
-// FIND POST
-// --------------------------------------------------
-
-async function findPost(
-  db,
-  postId
-) {
-  if (!postId) {
-    return null;
-  }
-
-  // Normal KrispySkin post ID.
-  let post =
-    await db.collection("posts").findOne({
-      id: postId
-    });
-
-  if (post) {
-    return post;
-  }
-
-  // Fallback for MongoDB ObjectId.
-  try {
-    if (
-      /^[a-fA-F0-9]{24}$/.test(
-        postId
-      )
-    ) {
-      const { ObjectId } =
-        await import("mongodb");
-
-      post =
-        await db
-          .collection("posts")
-          .findOne({
-            _id:
-              new ObjectId(postId)
-          });
-
-      if (post) {
-        return post;
-      }
-    }
-  } catch (error) {
-    console.error(
-      "ObjectId lookup failed:",
-      error
-    );
-  }
-
-  return null;
+  return {
+    db,
+    post
+  };
 }
 
 // --------------------------------------------------
@@ -255,56 +133,40 @@ async function findPost(
 // --------------------------------------------------
 
 async function hidePost(
-  db,
   postId,
   moderator
 ) {
-  const post =
-    await findPost(
-      db,
-      postId
-    );
+  const { db, post } =
+    await getPost(postId);
 
   if (!post) {
     return {
       success: false,
       message:
-        `Post \`${postId}\` was not found.`
+        "Post was not found."
     };
   }
 
-  const result =
-    await db
-      .collection("posts")
-      .updateOne(
-        {
-          _id: post._id
-        },
-        {
-          $set: {
-            hidden: true,
-            hiddenAt:
-              new Date(),
-            hiddenBy:
-              moderator
-          }
+  await db
+    .collection("posts")
+    .updateOne(
+      {
+        id: postId
+      },
+      {
+        $set: {
+          hidden: true,
+          hiddenAt: new Date(),
+          hiddenBy: moderator,
+          moderationStatus:
+            "hidden",
+          updatedAt: new Date()
         }
-      );
-
-  if (
-    result.matchedCount === 0
-  ) {
-    return {
-      success: false,
-      message:
-        "Failed to update the post."
-    };
-  }
+      }
+    );
 
   return {
-    success: true,
-    message:
-      `Post \`${post.id || postId}\` has been hidden.`
+    success: true
   };
 }
 
@@ -313,49 +175,367 @@ async function hidePost(
 // --------------------------------------------------
 
 async function deletePost(
-  db,
-  postId
+  postId,
+  moderator
 ) {
-  const post =
-    await findPost(
-      db,
-      postId
-    );
+  const { db, post } =
+    await getPost(postId);
 
   if (!post) {
     return {
       success: false,
       message:
-        `Post \`${postId}\` was not found.`
+        "Post was not found."
     };
   }
 
-  const result =
-    await db
-      .collection("posts")
-      .deleteOne({
-        _id: post._id
-      });
+  await db
+    .collection("posts")
+    .deleteOne({
+      id: postId
+    });
 
-  if (
-    result.deletedCount === 0
-  ) {
-    return {
-      success: false,
-      message:
-        "Failed to delete the post."
-    };
-  }
+  await db
+    .collection("moderation_logs")
+    .insertOne({
+      action: "delete_post",
+      postId,
+      moderator,
+      createdAt: new Date()
+    });
 
   return {
-    success: true,
-    message:
-      `Post \`${post.id || postId}\` has been deleted.`
+    success: true
   };
 }
 
 // --------------------------------------------------
-// POST
+// BAN USER
+// --------------------------------------------------
+
+async function banUser(
+  postId,
+  moderator
+) {
+  const { db, post } =
+    await getPost(postId);
+
+  if (!post) {
+    return {
+      success: false,
+      message:
+        "Post was not found."
+    };
+  }
+
+  if (!post.userId) {
+    return {
+      success: false,
+      message:
+        "This post does not have an owner."
+    };
+  }
+
+  const user =
+    await db
+      .collection("users")
+      .findOne({
+        id: post.userId
+      });
+
+  if (!user) {
+    return {
+      success: false,
+      message:
+        "Post owner was not found."
+    };
+  }
+
+  // Store the ban separately so the original
+  // user document remains available for moderation records.
+  await db
+    .collection("bans")
+    .updateOne(
+      {
+        userId: user.id
+      },
+      {
+        $set: {
+          userId: user.id,
+          username:
+            user.username ||
+            "Unknown",
+          reason:
+            "Community moderation",
+          bannedBy: moderator,
+          bannedAt: new Date(),
+          active: true
+        }
+      },
+      {
+        upsert: true
+      }
+    );
+
+  // Mark the account as banned.
+  await db
+    .collection("users")
+    .updateOne(
+      {
+        id: user.id
+      },
+      {
+        $set: {
+          banned: true,
+          bannedAt: new Date(),
+          bannedBy: moderator,
+          updatedAt: new Date()
+        }
+      }
+    );
+
+  // Invalidate all active sessions for the banned account.
+  await db
+    .collection("sessions")
+    .deleteMany({
+      userId: user.id
+    });
+
+  await db
+    .collection("moderation_logs")
+    .insertOne({
+      action: "ban_user",
+      postId,
+      userId: user.id,
+      moderator,
+      createdAt: new Date()
+    });
+
+  return {
+    success: true,
+    username:
+      user.username ||
+      "Unknown"
+  };
+}
+
+// --------------------------------------------------
+// IP BAN
+// --------------------------------------------------
+
+async function banIp(
+  postId,
+  moderator
+) {
+  const { db, post } =
+    await getPost(postId);
+
+  if (!post) {
+    return {
+      success: false,
+      message:
+        "Post was not found."
+    };
+  }
+
+  if (!post.userId) {
+    return {
+      success: false,
+      message:
+        "This post does not have an owner."
+    };
+  }
+
+  const user =
+    await db
+      .collection("users")
+      .findOne({
+        id: post.userId
+      });
+
+  if (!user) {
+    return {
+      success: false,
+      message:
+        "Post owner was not found."
+    };
+  }
+
+  /*
+   * The application must have previously stored
+   * the user's IP address on the user document.
+   *
+   * This supports the common field names below.
+   * Prefer "ipAddress" for new accounts.
+   */
+  const ipAddress =
+    user.ipAddress ||
+    user.lastIp ||
+    user.lastIP ||
+    null;
+
+  if (!ipAddress) {
+    return {
+      success: false,
+      message:
+        "No IP address is stored for this user."
+    };
+  }
+
+  await db
+    .collection("ip_bans")
+    .updateOne(
+      {
+        ipAddress
+      },
+      {
+        $set: {
+          ipAddress,
+          userId: user.id,
+          username:
+            user.username ||
+            "Unknown",
+          reason:
+            "Community moderation",
+          bannedBy: moderator,
+          bannedAt: new Date(),
+          active: true
+        }
+      },
+      {
+        upsert: true
+      }
+    );
+
+  await db
+    .collection("moderation_logs")
+    .insertOne({
+      action: "ip_ban",
+      postId,
+      userId: user.id,
+      moderator,
+      createdAt: new Date()
+    });
+
+  return {
+    success: true,
+    username:
+      user.username ||
+      "Unknown"
+  };
+}
+
+// --------------------------------------------------
+// DISMISS REPORT
+// --------------------------------------------------
+
+async function dismissReport(
+  reportId,
+  moderator
+) {
+  if (!reportId) {
+    return {
+      success: false,
+      message:
+        "Report ID is missing."
+    };
+  }
+
+  const client =
+    await clientPromise;
+
+  const db =
+    client.db("krispyskin");
+
+  const report =
+    await db
+      .collection("reports")
+      .findOne({
+        id: reportId
+      });
+
+  if (!report) {
+    return {
+      success: false,
+      message:
+        "Report was not found."
+    };
+  }
+
+  await db
+    .collection("reports")
+    .updateOne(
+      {
+        id: reportId
+      },
+      {
+        $set: {
+          status: "dismissed",
+          resolvedBy: moderator,
+          resolvedAt: new Date(),
+          updatedAt: new Date()
+        }
+      }
+    );
+
+  await db
+    .collection("moderation_logs")
+    .insertOne({
+      action: "dismiss_report",
+      reportId,
+      postId:
+        report.postId ||
+        null,
+      moderator,
+      createdAt: new Date()
+    });
+
+  return {
+    success: true
+  };
+}
+
+// --------------------------------------------------
+// UPDATE REPORT AFTER MODERATION
+// --------------------------------------------------
+
+async function resolveReportByPost(
+  postId,
+  action,
+  moderator
+) {
+  const client =
+    await clientPromise;
+
+  const db =
+    client.db("krispyskin");
+
+  await db
+    .collection("reports")
+    .updateMany(
+      {
+        postId,
+        status: {
+          $in: [
+            "pending",
+            "reviewing"
+          ]
+        }
+      },
+      {
+        $set: {
+          status: "resolved",
+          resolution: action,
+          resolvedBy: moderator,
+          resolvedAt: new Date(),
+          updatedAt: new Date()
+        }
+      }
+    );
+}
+
+// --------------------------------------------------
+// MAIN DISCORD INTERACTION ENDPOINT
 // --------------------------------------------------
 
 export async function POST(
@@ -399,39 +579,43 @@ export async function POST(
       JSON.parse(body);
 
     // ------------------------------------------------
-    // DISCORD VERIFICATION
+    // DISCORD ENDPOINT VERIFICATION
     // ------------------------------------------------
 
     if (
       interaction.type === 1
     ) {
-      return jsonResponse({
+      return discordResponse({
         type: 1
       });
     }
 
     // ------------------------------------------------
-    // BUTTON
+    // BUTTON INTERACTION
     // ------------------------------------------------
 
     if (
       interaction.type !== 3
     ) {
-      return jsonResponse(
-        ephemeralMessage(
-          "Unsupported interaction."
-        )
-      );
+      return discordResponse({
+        type: 4,
+        data: {
+          content:
+            "Unsupported interaction.",
+          flags: 64
+        }
+      });
     }
 
     const customId =
       interaction.data?.custom_id;
 
+    const member =
+      interaction.member;
+
     const username =
-      interaction.member?.user
-        ?.username ||
-      interaction.user?.username ||
-      "Unknown";
+      member?.user?.username ||
+      "Unknown moderator";
 
     console.log(
       "Discord moderation interaction:",
@@ -442,170 +626,258 @@ export async function POST(
     );
 
     // ------------------------------------------------
-    // MODERATOR
-    // ------------------------------------------------
-
-    if (
-      !isModerator(
-        interaction
-      )
-    ) {
-      return jsonResponse(
-        ephemeralMessage(
-          "You don't have permission to use moderation controls."
-        )
-      );
-    }
-
-    // ------------------------------------------------
-    // PARSE BUTTON
-    // ------------------------------------------------
-
-    const parsed =
-      parseModerationAction(
-        customId
-      );
-
-    if (!parsed) {
-      console.error(
-        "Unknown moderation custom_id:",
-        customId
-      );
-
-      return jsonResponse(
-        ephemeralMessage(
-          `Unknown moderation action: \`${customId || "empty"}\``
-        )
-      );
-    }
-
-    // ------------------------------------------------
     // DISMISS
     // ------------------------------------------------
 
     if (
-      parsed.action ===
-      "dismiss"
-    ) {
-      return jsonResponse(
-        ephemeralMessage(
-          `Report dismissed by **${username}**.`
-        )
-      );
-    }
-
-    // ------------------------------------------------
-    // POST ID
-    // ------------------------------------------------
-
-    if (!parsed.postId) {
-      return jsonResponse(
-        ephemeralMessage(
-          "Missing post ID."
-        )
-      );
-    }
-
-    console.log(
-      "Moderation target post:",
-      parsed.postId
-    );
-
-    // ------------------------------------------------
-    // DATABASE
-    // ------------------------------------------------
-
-    const client =
-      await clientPromise;
-
-    const db =
-      client.db("krispyskin");
-
-    // ------------------------------------------------
-    // HIDE
-    // ------------------------------------------------
-
-    if (
-      parsed.action ===
-      "hide"
-    ) {
-      try {
-        const result =
-          await hidePost(
-            db,
-            parsed.postId,
-            username
-          );
-
-        return jsonResponse(
-          ephemeralMessage(
-            result.success
-              ? `${result.message}\nModerator: **${username}**`
-              : result.message
-          )
-        );
-      } catch (error) {
-        console.error(
-          "Hide post error:",
-          error
-        );
-
-        return jsonResponse(
-          ephemeralMessage(
-            "Failed to hide the post."
-          )
-        );
-      }
-    }
-
-    // ------------------------------------------------
-    // DELETE
-    // ------------------------------------------------
-
-    if (
-      parsed.action ===
-      "delete"
-    ) {
-      try {
-        const result =
-          await deletePost(
-            db,
-            parsed.postId
-          );
-
-        return jsonResponse(
-          ephemeralMessage(
-            result.success
-              ? `${result.message}\nModerator: **${username}**`
-              : result.message
-          )
-        );
-      } catch (error) {
-        console.error(
-          "Delete post error:",
-          error
-        );
-
-        return jsonResponse(
-          ephemeralMessage(
-            "Failed to delete the post."
-          )
-        );
-      }
-    }
-
-    return jsonResponse(
-      ephemeralMessage(
-        "Unknown moderation action."
+      customId?.startsWith(
+        "report:dismiss:"
       )
+    ) {
+      const reportId =
+        customId.substring(
+          "report:dismiss:".length
+        );
+
+      const result =
+        await dismissReport(
+          reportId,
+          username
+        );
+
+      if (!result.success) {
+        return discordResponse({
+          type: 4,
+          data: {
+            content:
+              result.message,
+            flags: 64
+          }
+        });
+      }
+
+      return discordResponse({
+        type: 4,
+        data: {
+          content:
+            `Report \`${reportId}\` dismissed by ${username}.`,
+          flags: 64
+        }
+      });
+    }
+
+    // ------------------------------------------------
+    // HIDE POST
+    // ------------------------------------------------
+
+    if (
+      customId?.startsWith(
+        "report:hide:"
+      )
+    ) {
+      const postId =
+        customId.substring(
+          "report:hide:".length
+        );
+
+      const result =
+        await hidePost(
+          postId,
+          username
+        );
+
+      if (!result.success) {
+        return discordResponse({
+          type: 4,
+          data: {
+            content:
+              result.message,
+            flags: 64
+          }
+        });
+      }
+
+      await resolveReportByPost(
+        postId,
+        "hide_post",
+        username
+      );
+
+      return discordResponse({
+        type: 4,
+        data: {
+          content:
+            `Post \`${postId}\` has been hidden by ${username}.`,
+          flags: 64
+        }
+      });
+    }
+
+    // ------------------------------------------------
+    // DELETE POST
+    // ------------------------------------------------
+
+    if (
+      customId?.startsWith(
+        "report:delete:"
+      )
+    ) {
+      const postId =
+        customId.substring(
+          "report:delete:".length
+        );
+
+      const result =
+        await deletePost(
+          postId,
+          username
+        );
+
+      if (!result.success) {
+        return discordResponse({
+          type: 4,
+          data: {
+            content:
+              result.message,
+            flags: 64
+          }
+        });
+      }
+
+      await resolveReportByPost(
+        postId,
+        "delete_post",
+        username
+      );
+
+      return discordResponse({
+        type: 4,
+        data: {
+          content:
+            `Post \`${postId}\` has been deleted by ${username}.`,
+          flags: 64
+        }
+      });
+    }
+
+    // ------------------------------------------------
+    // BAN USER
+    // ------------------------------------------------
+
+    if (
+      customId?.startsWith(
+        "report:ban:"
+      )
+    ) {
+      const postId =
+        customId.substring(
+          "report:ban:".length
+        );
+
+      const result =
+        await banUser(
+          postId,
+          username
+        );
+
+      if (!result.success) {
+        return discordResponse({
+          type: 4,
+          data: {
+            content:
+              result.message,
+            flags: 64
+          }
+        });
+      }
+
+      await resolveReportByPost(
+        postId,
+        "ban_user",
+        username
+      );
+
+      return discordResponse({
+        type: 4,
+        data: {
+          content:
+            `User **${result.username}** has been banned by ${username}.`,
+          flags: 64
+        }
+      });
+    }
+
+    // ------------------------------------------------
+    // IP BAN
+    // ------------------------------------------------
+
+    if (
+      customId?.startsWith(
+        "report:ipban:"
+      )
+    ) {
+      const postId =
+        customId.substring(
+          "report:ipban:".length
+        );
+
+      const result =
+        await banIp(
+          postId,
+          username
+        );
+
+      if (!result.success) {
+        return discordResponse({
+          type: 4,
+          data: {
+            content:
+              result.message,
+            flags: 64
+          }
+        });
+      }
+
+      await resolveReportByPost(
+        postId,
+        "ip_ban",
+        username
+      );
+
+      return discordResponse({
+        type: 4,
+        data: {
+          content:
+            `The IP associated with user **${result.username}** has been banned by ${username}.`,
+          flags: 64
+        }
+      });
+    }
+
+    // ------------------------------------------------
+    // UNKNOWN BUTTON
+    // ------------------------------------------------
+
+    console.warn(
+      "Unknown moderation action:",
+      customId
     );
+
+    return discordResponse({
+      type: 4,
+      data: {
+        content:
+          "Unknown moderation action.",
+        flags: 64
+      }
+    });
   } catch (error) {
     console.error(
-      "Discord interaction error:",
+      "Discord interactions error:",
       error
     );
 
-    return jsonResponse(
+    return discordResponse(
       {
         error:
           "Internal server error"
