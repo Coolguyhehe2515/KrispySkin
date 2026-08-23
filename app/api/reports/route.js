@@ -1,184 +1,201 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import clientPromise from "../../../lib/mongodb";
 
 export const runtime = "nodejs";
 
-const VALID_REASONS = [
-  "nsfw",
-  "racist",
-  "predatory",
-  "harassment",
-  "impersonation",
-  "inappropriate",
-  "other"
-];
+const DISCORD_BOT_TOKEN =
+  process.env.DISCORD_BOT_TOKEN;
 
-const DISCORD_WEBHOOK_URL =
-  process.env.DISCORD_REPORT_WEBHOOK_URL;
+const DISCORD_REPORT_CHANNEL_ID =
+  process.env.DISCORD_REPORT_CHANNEL_ID;
+
+const DISCORD_API =
+  "https://discord.com/api/v10";
 
 // --------------------------------------------------
-// SEND REPORT TO DISCORD
+// DISCORD SEND MESSAGE
 // --------------------------------------------------
 
-async function sendDiscordReport({
-  report,
-  reporter,
-  post,
-  postOwner
-}) {
-  if (!DISCORD_WEBHOOK_URL) {
-    console.warn(
-      "DISCORD_REPORT_WEBHOOK_URL is not configured."
+async function sendDiscordReport(report) {
+  if (!DISCORD_BOT_TOKEN) {
+    throw new Error(
+      "DISCORD_BOT_TOKEN is not configured."
     );
-
-    return false;
   }
 
-  const reasonLabels = {
-    nsfw: "NSFW / Sexual Content",
-    racist: "Racist / Hateful Content",
-    predatory:
-      "Predatory / Grooming-related",
-    harassment:
-      "Harassment Toward a Specific Person",
-    impersonation:
-      "Impersonation",
-    inappropriate:
-      "Inappropriate Content",
-    other:
-      "Other"
-  };
-
-  const reason =
-    reasonLabels[report.reason] ||
-    report.reason;
+  if (!DISCORD_REPORT_CHANNEL_ID) {
+    throw new Error(
+      "DISCORD_REPORT_CHANNEL_ID is not configured."
+    );
+  }
 
   const description =
     report.description ||
-    "No additional information provided.";
+    "No description provided.";
 
-  const embed = {
-    title:
-      "KrispySkin — New Content Report",
+  const username =
+    report.username ||
+    "Unknown user";
 
-    description:
-      "A new community report has been submitted.",
+  const category =
+    report.category ||
+    "other";
 
-    color: 15158332,
+  const postTitle =
+    report.postTitle ||
+    report.title ||
+    "Unknown post";
 
-    fields: [
-      {
-        name: "Report ID",
-        value: `\`${report.id}\``,
-        inline: false
-      },
+  const postId =
+    report.postId ||
+    "Unknown";
 
-      {
-        name: "Reason",
-        value: reason,
-        inline: true
-      },
-
-      {
-        name: "Reporter",
-        value:
-          `**${reporter?.username || "Unknown"}**\n` +
-          `ID: \`${report.reporterId}\``,
-        inline: true
-      },
-
-      {
-        name: "Post Owner",
-        value:
-          `**${postOwner?.username || "Unknown"}**\n` +
-          `ID: \`${post?.userId || "Unknown"}\``,
-        inline: true
-      },
-
-      {
-        name: "Post ID",
-        value: `\`${report.postId}\``,
-        inline: true
-      },
-
-      {
-        name: "Skin ID",
-        value:
-          `\`${post?.skinId || "Unknown"}\``,
-        inline: true
-      },
-
-      {
-        name: "Post Title",
-        value:
-          post?.title ||
-          "Untitled post",
-        inline: false
-      },
-
-      {
-        name: "Additional Information",
-        value:
-          description.length > 1024
-            ? `${description.slice(
-                0,
-                1021
-              )}...`
-            : description,
-        inline: false
-      }
-    ],
-
-    timestamp:
-      new Date().toISOString(),
-
-    footer: {
-      text:
-        "KrispySkin Moderation"
-    }
-  };
+  const reportId =
+    report.id;
 
   const response =
     await fetch(
-      DISCORD_WEBHOOK_URL,
+      `${DISCORD_API}/channels/${DISCORD_REPORT_CHANNEL_ID}/messages`,
       {
         method: "POST",
-
         headers: {
+          Authorization:
+            `Bot ${DISCORD_BOT_TOKEN}`,
           "Content-Type":
             "application/json"
         },
-
         body: JSON.stringify({
-          username:
-            "KrispySkin Moderation",
+          embeds: [
+            {
+              title:
+                "KrispySkin Content Report",
 
-          embeds: [embed]
+              description:
+                "A user submitted a content report.",
+
+              fields: [
+                {
+                  name:
+                    "Report ID",
+                  value:
+                    `\`${reportId}\``,
+                  inline: false
+                },
+
+                {
+                  name:
+                    "Category",
+                  value:
+                    category,
+                  inline: true
+                },
+
+                {
+                  name:
+                    "Reporter",
+                  value:
+                    username,
+                  inline: true
+                },
+
+                {
+                  name:
+                    "Post",
+                  value:
+                    postTitle,
+                  inline: false
+                },
+
+                {
+                  name:
+                    "Post ID",
+                  value:
+                    `\`${postId}\``,
+                  inline: false
+                },
+
+                {
+                  name:
+                    "Reason",
+                  value:
+                    description.substring(
+                      0,
+                      1024
+                    ),
+                  inline: false
+                }
+              ],
+
+              footer: {
+                text:
+                  "Status: Pending"
+              },
+
+              timestamp:
+                new Date().toISOString()
+            }
+          ],
+
+          components: [
+            {
+              type: 1,
+
+              components: [
+                {
+                  type: 2,
+                  style: 2,
+                  label:
+                    "Dismiss",
+                  custom_id:
+                    `report:dismiss:${reportId}`
+                },
+
+                {
+                  type: 2,
+                  style: 1,
+                  label:
+                    "Hide Post",
+                  custom_id:
+                    `report:hide:${reportId}`
+                },
+
+                {
+                  type: 2,
+                  style: 4,
+                  label:
+                    "Delete Post",
+                  custom_id:
+                    `report:delete:${reportId}`
+                }
+              ]
+            }
+          ]
         })
       }
     );
 
   if (!response.ok) {
-    const errorText =
+    const text =
       await response.text();
 
     throw new Error(
-      `Discord webhook failed (${response.status}): ${errorText}`
+      `Discord API ${response.status}: ${text}`
     );
   }
 
-  return true;
+  return response.json();
 }
 
 // --------------------------------------------------
 // POST REPORT
 // --------------------------------------------------
 
-export async function POST(request) {
+export async function POST(
+  request
+) {
   try {
     // ------------------------------------------------
-    // CHECK LOGIN
+    // SESSION
     // ------------------------------------------------
 
     const sessionToken =
@@ -191,7 +208,7 @@ export async function POST(request) {
         {
           success: false,
           error:
-            "You must be logged in to report content."
+            "You must be logged in to submit a report."
         },
         {
           status: 401
@@ -200,30 +217,30 @@ export async function POST(request) {
     }
 
     // ------------------------------------------------
-    // MONGODB
+    // DATABASE
     // ------------------------------------------------
 
     const client =
       await clientPromise;
 
     const db =
-      client.db("krispyskin");
-
-    // ------------------------------------------------
-    // CHECK SESSION
-    // ------------------------------------------------
+      client.db(
+        "krispyskin"
+      );
 
     const session =
       await db
         .collection("sessions")
         .findOne({
-          token: sessionToken
+          token:
+            sessionToken
         });
 
     if (
       !session ||
-      new Date(session.expiresAt) <=
-        new Date()
+      new Date(
+        session.expiresAt
+      ) <= new Date()
     ) {
       return NextResponse.json(
         {
@@ -237,15 +254,12 @@ export async function POST(request) {
       );
     }
 
-    // ------------------------------------------------
-    // GET USER
-    // ------------------------------------------------
-
     const user =
       await db
         .collection("users")
         .findOne({
-          id: session.userId
+          id:
+            session.userId
         });
 
     if (!user) {
@@ -262,7 +276,7 @@ export async function POST(request) {
     }
 
     // ------------------------------------------------
-    // READ REQUEST
+    // REQUEST DATA
     // ------------------------------------------------
 
     const body =
@@ -274,23 +288,17 @@ export async function POST(request) {
         ? body.postId.trim()
         : "";
 
-    const reason =
-      typeof body.reason ===
+    const category =
+      typeof body.category ===
       "string"
-        ? body.reason
-            .trim()
-            .toLowerCase()
-        : "";
+        ? body.category.trim()
+        : "other";
 
     const description =
       typeof body.description ===
       "string"
         ? body.description.trim()
         : "";
-
-    // ------------------------------------------------
-    // VALIDATION
-    // ------------------------------------------------
 
     if (!postId) {
       return NextResponse.json(
@@ -305,16 +313,28 @@ export async function POST(request) {
       );
     }
 
+    // ------------------------------------------------
+    // VALID REPORT CATEGORIES
+    // ------------------------------------------------
+
+    const allowedCategories = [
+      "nsfw",
+      "racist",
+      "predatoric",
+      "harassment",
+      "other"
+    ];
+
     if (
-      !VALID_REASONS.includes(
-        reason
+      !allowedCategories.includes(
+        category
       )
     ) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "Invalid report reason."
+            "Invalid report category."
         },
         {
           status: 400
@@ -322,31 +342,19 @@ export async function POST(request) {
       );
     }
 
-    if (
-      description.length >
-      1000
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Report description is too long."
-        },
-        {
-          status: 400
-        }
-      );
-    }
+    // ------------------------------------------------
+    // OTHER REQUIRES REASON
+    // ------------------------------------------------
 
     if (
-      reason === "other" &&
+      category === "other" &&
       !description
     ) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "Please explain the reason for an Other report."
+            "Please provide a reason for Other."
         },
         {
           status: 400
@@ -355,14 +363,15 @@ export async function POST(request) {
     }
 
     // ------------------------------------------------
-    // FIND POST
+    // CHECK POST
     // ------------------------------------------------
 
     const post =
       await db
         .collection("posts")
         .findOne({
-          id: postId
+          id:
+            postId
         });
 
     if (!post) {
@@ -379,11 +388,13 @@ export async function POST(request) {
     }
 
     // ------------------------------------------------
-    // PREVENT SELF REPORT
+    // PREVENT REPORTING OWN POST
     // ------------------------------------------------
 
     if (
-      post.userId === user.id
+      post.userId &&
+      post.userId ===
+        user.id
     ) {
       return NextResponse.json(
         {
@@ -398,18 +409,7 @@ export async function POST(request) {
     }
 
     // ------------------------------------------------
-    // FIND POST OWNER
-    // ------------------------------------------------
-
-    const postOwner =
-      await db
-        .collection("users")
-        .findOne({
-          id: post.userId
-        });
-
-    // ------------------------------------------------
-    // PREVENT DUPLICATE PENDING REPORT
+    // PREVENT DUPLICATE ACTIVE REPORT
     // ------------------------------------------------
 
     const existingReport =
@@ -417,8 +417,14 @@ export async function POST(request) {
         .collection("reports")
         .findOne({
           postId,
-          reporterId: user.id,
-          status: "pending"
+          userId:
+            user.id,
+          status: {
+            $in: [
+              "pending",
+              "reviewing"
+            ]
+          }
         });
 
     if (existingReport) {
@@ -435,25 +441,63 @@ export async function POST(request) {
     }
 
     // ------------------------------------------------
-    // CREATE REPORT
+    // CREATE REPORT ID
     // ------------------------------------------------
 
     const reportId =
-      `report_${crypto
-        .randomBytes(8)
-        .toString("hex")}`;
+      `report_${cryptoRandomId()}`;
+
+    // ------------------------------------------------
+    // GET POST OWNER
+    // ------------------------------------------------
+
+    let postOwner = null;
+
+    if (post.userId) {
+      postOwner =
+        await db
+          .collection("users")
+          .findOne({
+            id:
+              post.userId
+          });
+    }
+
+    // ------------------------------------------------
+    // CREATE REPORT
+    // ------------------------------------------------
 
     const report = {
-      id: reportId,
+      id:
+        reportId,
 
-      postId,
+      postId:
+        postId,
 
-      reporterId:
+      postTitle:
+        post.title ||
+        "Untitled Skin",
+
+      postOwnerId:
+        post.userId ||
+        null,
+
+      postOwnerUsername:
+        postOwner?.username ||
+        "Unknown",
+
+      userId:
         user.id,
 
-      reason,
+      username:
+        user.username ||
+        "Unknown",
 
-      description,
+      category:
+        category,
+
+      description:
+        description,
 
       status:
         "pending",
@@ -461,14 +505,8 @@ export async function POST(request) {
       createdAt:
         new Date(),
 
-      reviewedAt:
-        null,
-
-      reviewedBy:
-        null,
-
-      action:
-        null
+      updatedAt:
+        new Date()
     };
 
     await db
@@ -478,25 +516,74 @@ export async function POST(request) {
       );
 
     // ------------------------------------------------
-    // DISCORD NOTIFICATION
+    // SEND TO DISCORD
     // ------------------------------------------------
 
     let discordSent =
       false;
 
+    let discordMessageId =
+      null;
+
     try {
+      const discordMessage =
+        await sendDiscordReport(
+          report
+        );
+
       discordSent =
-        await sendDiscordReport({
-          report,
-          reporter: user,
-          post,
-          postOwner
-        });
+        true;
+
+      discordMessageId =
+        discordMessage?.id ||
+        null;
+
+      await db
+        .collection("reports")
+        .updateOne(
+          {
+            id:
+              reportId
+          },
+          {
+            $set: {
+              discordSent:
+                true,
+
+              discordMessageId:
+                discordMessageId,
+
+              updatedAt:
+                new Date()
+            }
+          }
+        );
     } catch (discordError) {
       console.error(
-        "Discord report notification error:",
+        "Discord report notification failed:",
         discordError
       );
+
+      await db
+        .collection("reports")
+        .updateOne(
+          {
+            id:
+              reportId
+          },
+          {
+            $set: {
+              discordSent:
+                false,
+
+              discordError:
+                discordError.message,
+
+              updatedAt:
+                new Date()
+            }
+          }
+        );
     }
 
     // ------------------------------------------------
@@ -511,16 +598,22 @@ export async function POST(request) {
           id:
             reportId,
 
-          postId,
+          postId:
+            postId,
 
-          reason,
+          category:
+            category,
 
           status:
             "pending"
         },
 
         notification: {
-          discordSent
+          discordSent:
+            discordSent,
+
+          discordMessageId:
+            discordMessageId
         },
 
         message:
@@ -547,4 +640,42 @@ export async function POST(request) {
       }
     );
   }
+}
+
+// --------------------------------------------------
+// RANDOM REPORT ID
+// --------------------------------------------------
+
+function cryptoRandomId() {
+  const bytes =
+    new Uint8Array(8);
+
+  if (
+    typeof crypto !==
+    "undefined" &&
+    crypto.getRandomValues
+  ) {
+    crypto.getRandomValues(
+      bytes
+    );
+  } else {
+    for (
+      let i = 0;
+      i < bytes.length;
+      i++
+    ) {
+      bytes[i] =
+        Math.floor(
+          Math.random() * 256
+        );
+    }
+  }
+
+  return Array.from(
+    bytes,
+    (byte) =>
+      byte
+        .toString(16)
+        .padStart(2, "0")
+  ).join("");
 }
