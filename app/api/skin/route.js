@@ -10,7 +10,7 @@ export async function POST(request) {
   try {
     // Check login session
     const sessionToken =
-      request.cookies.get("krispyskin_session")?.value;
+      request.cookies.get("krispy_skin_session")?.value;
 
     if (!sessionToken) {
       return NextResponse.json(
