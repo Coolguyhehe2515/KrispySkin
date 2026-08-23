@@ -19,50 +19,104 @@ async function sendBrevoEmail(to, code) {
   const from = process.env.EMAIL_FROM;
 
   if (!apiKey) {
-    throw new Error("BREVO_API_KEY is not configured");
+    throw new Error(
+      "BREVO_API_KEY is not configured"
+    );
   }
 
   if (!from) {
-    throw new Error("EMAIL_FROM is not configured");
+    throw new Error(
+      "EMAIL_FROM is not configured"
+    );
   }
 
   const response = await fetch(
     "https://api.brevo.com/v3/smtp/email",
     {
       method: "POST",
+
       headers: {
         accept: "application/json",
         "api-key": apiKey,
         "content-type": "application/json"
       },
+
       body: JSON.stringify({
         sender: {
           email: from,
           name: "KrispySkin"
         },
+
         to: [
           {
             email: to
           }
         ],
-        subject: "KrispySkin Email Verification",
+
+        subject:
+          "KrispySkin Email Verification",
+
         htmlContent: `
-          <div style="font-family:Arial,sans-serif">
-            <h2>KrispySkin</h2>
-            <p>Your email verification code is:</p>
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>KrispySkin Email Verification</title>
+            </head>
 
-            <div style="
-              font-size:32px;
-              font-weight:bold;
-              letter-spacing:8px;
-              margin:20px 0;
-            ">
-              ${code}
-            </div>
+            <body
+              style="
+                margin:0;
+                padding:0;
+                background:#f5f5f5;
+                font-family:Arial,sans-serif;
+              "
+            >
+              <div
+                style="
+                  max-width:520px;
+                  margin:40px auto;
+                  background:#ffffff;
+                  padding:32px;
+                  border-radius:12px;
+                "
+              >
+                <h2
+                  style="
+                    margin-top:0;
+                    color:#111111;
+                  "
+                >
+                  KrispySkin
+                </h2>
 
-            <p>This code expires in 10 minutes.</p>
-            <p>If you did not request this code, you can ignore this email.</p>
-          </div>
+                <p>
+                  Your email verification code is:
+                </p>
+
+                <div
+                  style="
+                    font-size:32px;
+                    font-weight:bold;
+                    letter-spacing:8px;
+                    margin:24px 0;
+                    text-align:center;
+                  "
+                >
+                  ${code}
+                </div>
+
+                <p>
+                  This code expires in 10 minutes.
+                </p>
+
+                <p>
+                  If you did not request this code,
+                  you can safely ignore this email.
+                </p>
+              </div>
+            </body>
+          </html>
         `
       })
     }
@@ -79,6 +133,7 @@ async function sendBrevoEmail(to, code) {
 
 export async function POST(request) {
   try {
+    // Get the currently authenticated session.
     const sessionToken =
       request.cookies.get(
         "krispyskin_session"
@@ -90,10 +145,13 @@ export async function POST(request) {
           success: false,
           error: "You must be logged in"
         },
-        { status: 401 }
+        {
+          status: 401
+        }
       );
     }
 
+    // Read the requested email address.
     const body = await request.json();
 
     const email =
@@ -107,10 +165,13 @@ export async function POST(request) {
           success: false,
           error: "Email is required"
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
+    // Basic email validation.
     if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     ) {
@@ -119,15 +180,29 @@ export async function POST(request) {
           success: false,
           error: "Invalid email address"
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
     const client = await clientPromise;
     const db = client.db("krispyskin");
 
+    const sessions =
+      db.collection("sessions");
+
+    const users =
+      db.collection("users");
+
+    const verifications =
+      db.collection(
+        "email_verifications"
+      );
+
+    // Validate the current session.
     const session =
-      await db.collection("sessions").findOne({
+      await sessions.findOne({
         token: sessionToken
       });
 
@@ -140,12 +215,15 @@ export async function POST(request) {
           success: false,
           error: "Session expired"
         },
-        { status: 401 }
+        {
+          status: 401
+        }
       );
     }
 
+    // Get the authenticated user.
     const user =
-      await db.collection("users").findOne({
+      await users.findOne({
         id: session.userId
       });
 
@@ -155,12 +233,16 @@ export async function POST(request) {
           success: false,
           error: "User not found"
         },
-        { status: 404 }
+        {
+          status: 404
+        }
       );
     }
 
+    // Prevent using an email already linked
+    // to another account.
     const existingEmail =
-      await db.collection("users").findOne({
+      await users.findOne({
         email,
         id: {
           $ne: user.id
@@ -173,19 +255,24 @@ export async function POST(request) {
           success: false,
           error: "That email is already in use"
         },
-        { status: 409 }
+        {
+          status: 409
+        }
       );
     }
 
+    // Prevent verification-code spam.
     const previous =
-      await db.collection("email_verifications").findOne({
+      await verifications.findOne({
         userId: user.id
       });
 
     if (
       previous?.createdAt &&
       Date.now() -
-        new Date(previous.createdAt).getTime() <
+        new Date(
+          previous.createdAt
+        ).getTime() <
         RESEND_COOLDOWN_MS
     ) {
       return NextResponse.json(
@@ -194,37 +281,54 @@ export async function POST(request) {
           error:
             "Please wait before requesting another code"
         },
-        { status: 429 }
+        {
+          status: 429
+        }
       );
     }
 
+    // Generate a secure six-digit verification code.
     const code = String(
-      crypto.randomInt(100000, 1000000)
+      crypto.randomInt(
+        100000,
+        1000000
+      )
     );
 
-    await db
-      .collection("email_verifications")
-      .deleteMany({
-        userId: user.id
-      });
+    // Remove older verification requests.
+    await verifications.deleteMany({
+      userId: user.id
+    });
 
-    await db
-      .collection("email_verifications")
-      .insertOne({
-        userId: user.id,
-        email,
-        codeHash: hashCode(code),
-        createdAt: new Date(),
-        expiresAt: new Date(
-          Date.now() + CODE_EXPIRY_MS
+    // Store only the hash of the verification code.
+    await verifications.insertOne({
+      userId: user.id,
+
+      email,
+
+      codeHash:
+        hashCode(code),
+
+      createdAt:
+        new Date(),
+
+      expiresAt:
+        new Date(
+          Date.now() +
+            CODE_EXPIRY_MS
         )
-      });
+    });
 
-    await sendBrevoEmail(email, code);
+    // Send the verification email through Brevo.
+    await sendBrevoEmail(
+      email,
+      code
+    );
 
     return NextResponse.json({
       success: true,
-      message: "Verification code sent"
+      message:
+        "Verification code sent"
     });
   } catch (error) {
     console.error(
@@ -235,9 +339,12 @@ export async function POST(request) {
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to send verification email"
+        error:
+          "Failed to send verification email"
       },
-      { status: 500 }
+      {
+        status: 500
+      }
     );
   }
-        }
+}
