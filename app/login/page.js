@@ -42,6 +42,7 @@ export default function LoginPage() {
         router.push("/dashboard");
       }, 500);
     } catch (error) {
+      console.error("Login error:", error);
       setMessage("Could not connect to KrispySkin.");
     } finally {
       setLoading(false);
@@ -106,10 +107,33 @@ export default function LoginPage() {
             width: "100%",
             padding: "12px",
             marginTop: "6px",
-            marginBottom: "15px",
+            marginBottom: "8px",
             boxSizing: "border-box"
           }}
         />
+
+        <div
+          style={{
+            textAlign: "right",
+            marginBottom: "15px"
+          }}
+        >
+          <button
+            type="button"
+            onClick={() =>
+              router.push("/forgot-password")
+            }
+            style={{
+              border: "none",
+              background: "none",
+              padding: 0,
+              cursor: "pointer",
+              textDecoration: "underline"
+            }}
+          >
+            Forgot password?
+          </button>
+        </div>
 
         <button
           type="submit"
@@ -131,4 +155,4 @@ export default function LoginPage() {
       </form>
     </main>
   );
-            }
+}
