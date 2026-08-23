@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import clientPromise from "../../../../../lib/mongodb";
 import crypto from "crypto";
+import clientPromise from "../../../../../lib/mongodb";
 
 export const runtime = "nodejs";
 
@@ -15,7 +15,7 @@ export async function POST(request) {
   try {
     const sessionToken =
       request.cookies.get(
-        "krispyskin_session"
+        "krispy_skin_session"
       )?.value;
 
     if (!sessionToken) {
@@ -28,23 +28,30 @@ export async function POST(request) {
       );
     }
 
-    const body = await request.json();
+    const body =
+      await request.json();
 
     const code =
-      String(body.code || "").trim();
+      String(
+        body.code || ""
+      ).trim();
 
     if (!/^\d{6}$/.test(code)) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid verification code"
+          error:
+            "Invalid verification code"
         },
         { status: 400 }
       );
     }
 
-    const client = await clientPromise;
-    const db = client.db("krispyskin");
+    const client =
+      await clientPromise;
+
+    const db =
+      client.db("krispskin");
 
     const session =
       await db.collection("sessions").findOne({
@@ -53,7 +60,8 @@ export async function POST(request) {
 
     if (
       !session ||
-      new Date(session.expiresAt) <= new Date()
+      new Date(session.expiresAt) <=
+        new Date()
     ) {
       return NextResponse.json(
         {
@@ -66,7 +74,9 @@ export async function POST(request) {
 
     const verification =
       await db
-        .collection("email_verifications")
+        .collection(
+          "email_verifications"
+        )
         .findOne({
           userId: session.userId
         });
@@ -75,25 +85,32 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error: "No verification request found"
+          error:
+            "No verification request found"
         },
         { status: 404 }
       );
     }
 
     if (
-      new Date(verification.expiresAt) <= new Date()
+      new Date(
+        verification.expiresAt
+      ) <= new Date()
     ) {
       await db
-        .collection("email_verifications")
+        .collection(
+          "email_verifications"
+        )
         .deleteOne({
-          _id: verification._id
+          _id:
+            verification._id
         });
 
       return NextResponse.json(
         {
           success: false,
-          error: "Verification code expired"
+          error:
+            "Verification code expired"
         },
         { status: 400 }
       );
@@ -102,57 +119,66 @@ export async function POST(request) {
     const submittedHash =
       hashCode(code);
 
-    const expectedBuffer =
-      Buffer.from(
-        verification.codeHash,
-        "hex"
+    const storedHash =
+      verification.codeHash;
+
+    const valid =
+      submittedHash.length ===
+        storedHash.length &&
+      crypto.timingSafeEqual(
+        Buffer.from(
+          submittedHash,
+          "hex"
+        ),
+        Buffer.from(
+          storedHash,
+          "hex"
+        )
       );
 
-    const submittedBuffer =
-      Buffer.from(
-        submittedHash,
-        "hex"
-      );
-
-    if (
-      expectedBuffer.length !==
-      submittedBuffer.length ||
-      !crypto.timingSafeEqual(
-        expectedBuffer,
-        submittedBuffer
-      )
-    ) {
+    if (!valid) {
       return NextResponse.json(
         {
           success: false,
-          error: "Incorrect verification code"
+          error:
+            "Incorrect verification code"
         },
         { status: 400 }
       );
     }
 
-    await db.collection("users").updateOne(
-      {
-        id: session.userId
-      },
-      {
-        $set: {
-          email: verification.email,
-          emailVerified: true,
-          emailVerifiedAt: new Date()
+    await db
+      .collection("users")
+      .updateOne(
+        {
+          id:
+            session.userId
+        },
+        {
+          $set: {
+            email:
+              verification.email,
+            emailVerified:
+              true,
+            emailVerifiedAt:
+              new Date()
+          }
         }
-      }
-    );
+      );
 
     await db
-      .collection("email_verifications")
+      .collection(
+        "email_verifications"
+      )
       .deleteOne({
-        _id: verification._id
+        _id:
+          verification._id
       });
 
     return NextResponse.json({
       success: true,
-      message: "Email verified successfully"
+      message:
+        "Email authorized successfully"
     });
   } catch (error) {
     console.error(
@@ -163,7 +189,8 @@ export async function POST(request) {
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to verify email"
+        error:
+          "Failed to verify email"
       },
       { status: 500 }
     );
