@@ -13,7 +13,7 @@ const DISCORD_API =
   "https://discord.com/api/v10";
 
 // --------------------------------------------------
-// DISCORD SEND MESSAGE
+// SEND REPORT TO DISCORD
 // --------------------------------------------------
 
 async function sendDiscordReport(report) {
@@ -151,6 +151,8 @@ async function sendDiscordReport(report) {
             }
           ],
 
+          // Discord allows a maximum of 5 buttons
+          // inside one action row.
           components: [
             {
               type: 1,
@@ -164,7 +166,8 @@ async function sendDiscordReport(report) {
                   label:
                     "Dismiss",
 
-                  // Dismiss = REPORT ID
+                  // Dismiss needs the report ID
+                  // because it changes the report.
                   custom_id:
                     `report:dismiss:${reportId}`
                 },
@@ -177,7 +180,7 @@ async function sendDiscordReport(report) {
                   label:
                     "Hide Post",
 
-                  // Hide = POST ID
+                  // Moderation actions use the POST ID.
                   custom_id:
                     `report:hide:${postId}`
                 },
@@ -190,9 +193,35 @@ async function sendDiscordReport(report) {
                   label:
                     "Delete Post",
 
-                  // Delete = POST ID
+                  // Moderation actions use the POST ID.
                   custom_id:
                     `report:delete:${postId}`
+                },
+
+                {
+                  type: 2,
+
+                  style: 4,
+
+                  label:
+                    "Ban User",
+
+                  // Ban the owner of this POST.
+                  custom_id:
+                    `report:ban:${postId}`
+                },
+
+                {
+                  type: 2,
+
+                  style: 4,
+
+                  label:
+                    "IP Ban",
+
+                  // IP-ban the owner of this POST.
+                  custom_id:
+                    `report:ipban:${postId}`
                 }
               ]
             }
@@ -217,10 +246,12 @@ async function sendDiscordReport(report) {
 // POST REPORT
 // --------------------------------------------------
 
-export async function POST(request) {
+export async function POST(
+  request
+) {
   try {
     // ------------------------------------------------
-    // SESSION
+    // GET SESSION
     // ------------------------------------------------
 
     const sessionToken =
@@ -232,6 +263,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
+
           error:
             "You must be logged in to submit a report."
         },
@@ -249,11 +281,9 @@ export async function POST(request) {
       await clientPromise;
 
     const db =
-      client.db("krispyskin");
-
-    // ------------------------------------------------
-    // CHECK SESSION
-    // ------------------------------------------------
+      client.db(
+        "krispyskin"
+      );
 
     const session =
       await db
@@ -272,6 +302,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
+
           error:
             "Your session has expired. Please login again."
         },
@@ -280,10 +311,6 @@ export async function POST(request) {
         }
       );
     }
-
-    // ------------------------------------------------
-    // GET USER
-    // ------------------------------------------------
 
     const user =
       await db
@@ -297,6 +324,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
+
           error:
             "User account not found."
         },
@@ -314,31 +342,28 @@ export async function POST(request) {
       await request.json();
 
     const postId =
-      typeof body?.postId ===
+      typeof body.postId ===
       "string"
         ? body.postId.trim()
         : "";
 
     const category =
-      typeof body?.category ===
+      typeof body.category ===
       "string"
         ? body.category.trim()
         : "other";
 
     const description =
-      typeof body?.description ===
+      typeof body.description ===
       "string"
         ? body.description.trim()
         : "";
-
-    // ------------------------------------------------
-    // VALIDATE POST ID
-    // ------------------------------------------------
 
     if (!postId) {
       return NextResponse.json(
         {
           success: false,
+
           error:
             "Post ID is required."
         },
@@ -368,6 +393,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
+
           error:
             "Invalid report category."
         },
@@ -378,7 +404,7 @@ export async function POST(request) {
     }
 
     // ------------------------------------------------
-    // OTHER REQUIRES REASON
+    // OTHER REQUIRES A REASON
     // ------------------------------------------------
 
     if (
@@ -388,6 +414,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
+
           error:
             "Please provide a reason for Other."
         },
@@ -398,7 +425,7 @@ export async function POST(request) {
     }
 
     // ------------------------------------------------
-    // CHECK POST
+    // FIND POST
     // ------------------------------------------------
 
     const post =
@@ -413,6 +440,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
+
           error:
             "Post not found."
         },
@@ -434,6 +462,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
+
           error:
             "You cannot report your own post."
         },
@@ -468,6 +497,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
+
           error:
             "You have already reported this post."
         },
@@ -509,8 +539,8 @@ export async function POST(request) {
       id:
         reportId,
 
-      // IMPORTANT:
       // This is the actual post ID.
+      // Discord moderation buttons use this value.
       postId:
         postId,
 
@@ -541,12 +571,6 @@ export async function POST(request) {
 
       status:
         "pending",
-
-      discordSent:
-        false,
-
-      discordMessageId:
-        null,
 
       createdAt:
         new Date(),
@@ -595,7 +619,6 @@ export async function POST(request) {
             id:
               reportId
           },
-
           {
             $set: {
               discordSent:
@@ -609,7 +632,9 @@ export async function POST(request) {
             }
           }
         );
-    } catch (discordError) {
+    } catch (
+      discordError
+    ) {
       console.error(
         "Discord report notification failed:",
         discordError
@@ -622,7 +647,6 @@ export async function POST(request) {
             id:
               reportId
           },
-
           {
             $set: {
               discordSent:
@@ -651,7 +675,7 @@ export async function POST(request) {
           id:
             reportId,
 
-          // Return the actual POST ID.
+          // Return the actual post ID.
           postId:
             postId,
 
@@ -673,7 +697,6 @@ export async function POST(request) {
         message:
           "Report submitted successfully."
       },
-
       {
         status: 201
       }
@@ -691,7 +714,6 @@ export async function POST(request) {
         error:
           "Failed to submit report."
       },
-
       {
         status: 500
       }
