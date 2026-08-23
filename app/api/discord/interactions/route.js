@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import clientPromise from "../../../lib/mongodb";
+import clientPromise from "../../../../lib/mongodb";
 
 export const runtime = "nodejs";
 
