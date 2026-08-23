@@ -11,13 +11,11 @@ export default function Dashboard() {
 
   const canvas3DRef = useRef(null);
   const canvas2DRef = useRef(null);
-
   const viewer3DRef = useRef(null);
   const viewer2DRef = useRef(null);
 
   const [user, setUser] = useState(null);
   const [skins, setSkins] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
@@ -26,40 +24,113 @@ export default function Dashboard() {
   const [postingSkin, setPostingSkin] = useState(null);
 
   const [viewMode, setViewMode] = useState("3d");
+  const [darkMode, setDarkMode] = useState(false);
 
   const [postTitle, setPostTitle] = useState("");
   const [postDescription, setPostDescription] = useState("");
   const [postModalSkin, setPostModalSkin] = useState(null);
 
-  // --------------------------------------------------
-  // PROFILE PICTURE
-  // --------------------------------------------------
-
   const profilePicture =
-    user?.profilePicture ||
-    DEFAULT_PROFILE_PICTURE;
+    user?.profilePicture || DEFAULT_PROFILE_PICTURE;
 
   // --------------------------------------------------
-  // LOAD USER + SKIN LIBRARY
+  // THEME
+  // --------------------------------------------------
+
+  useEffect(() => {
+    function updateTheme() {
+      const saved =
+        localStorage.getItem("krispy_theme") || "system";
+
+      const dark =
+        saved === "dark" ||
+        (
+          saved === "system" &&
+          window.matchMedia(
+            "(prefers-color-scheme: dark)"
+          ).matches
+        );
+
+      setDarkMode(dark);
+    }
+
+    updateTheme();
+
+    const media = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    );
+
+    media.addEventListener("change", updateTheme);
+    window.addEventListener("storage", updateTheme);
+
+    return () => {
+      media.removeEventListener("change", updateTheme);
+      window.removeEventListener("storage", updateTheme);
+    };
+  }, []);
+
+  const colors = darkMode
+    ? {
+        background: "#111",
+        text: "#eee",
+        muted: "#aaa",
+        card: "#1c1c1c",
+        input: "#252525",
+        border: "#444",
+        button: "#2b2b2b",
+        viewer: "#202020",
+        active: "#183d22"
+      }
+    : {
+        background: "#fff",
+        text: "#171717",
+        muted: "#666",
+        card: "#fff",
+        input: "#fff",
+        border: "#ccc",
+        button: "#fff",
+        viewer: "#eeeeee",
+        active: "#e9ffe9"
+      };
+
+  // --------------------------------------------------
+  // LOAD ACCOUNT + SKINS
   // --------------------------------------------------
 
   useEffect(() => {
     async function loadData() {
       try {
-        const meResponse = await fetch("/api/auth/me", {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store"
-        });
+        // Use the same profile endpoint that already
+        // correctly identifies the logged-in account.
+        const profileResponse = await fetch(
+          "/api/account/profile",
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store"
+          }
+        );
 
-        const meData = await meResponse.json();
+        const profileData =
+          await profileResponse.json();
 
-        if (!meResponse.ok || !meData.authenticated) {
+        if (
+          !profileResponse.ok ||
+          !profileData.success
+        ) {
           router.replace("/login");
           return;
         }
 
-        setUser(meData.user);
+        const account =
+          profileData.user || profileData.profile;
+
+        if (!account) {
+          router.replace("/login");
+          return;
+        }
+
+        setUser(account);
 
         const libraryResponse = await fetch(
           "/api/skin/library",
@@ -74,9 +145,7 @@ export default function Dashboard() {
           await libraryResponse.json();
 
         if (libraryResponse.ok) {
-          setSkins(
-            libraryData.skins || []
-          );
+          setSkins(libraryData.skins || []);
 
           setUser((oldUser) => ({
             ...oldUser,
@@ -120,9 +189,7 @@ export default function Dashboard() {
         const skinview3d =
           await import("skinview3d");
 
-        if (destroyed) {
-          return;
-        }
+        if (destroyed) return;
 
         const viewer =
           new skinview3d.SkinViewer({
@@ -131,27 +198,15 @@ export default function Dashboard() {
             height: 500
           });
 
-        viewer3DRef.current =
-          viewer;
+        viewer3DRef.current = viewer;
 
-        viewer.controls.enableRotate =
-          true;
+        viewer.controls.enableRotate = true;
+        viewer.controls.enableZoom = true;
+        viewer.controls.enablePan = false;
 
-        viewer.controls.enableZoom =
-          true;
+        viewer.camera.position.set(0, 0, 35);
 
-        viewer.controls.enablePan =
-          false;
-
-        viewer.camera.position.set(
-          0,
-          0,
-          35
-        );
-
-        if (
-          skinview3d.WalkingAnimation
-        ) {
+        if (skinview3d.WalkingAnimation) {
           viewer.animation =
             new skinview3d.WalkingAnimation();
         }
@@ -211,9 +266,7 @@ export default function Dashboard() {
         const skinview3d =
           await import("skinview3d");
 
-        if (destroyed) {
-          return;
-        }
+        if (destroyed) return;
 
         const viewer =
           new skinview3d.SkinViewer({
@@ -222,31 +275,15 @@ export default function Dashboard() {
             height: 500
           });
 
-        viewer2DRef.current =
-          viewer;
+        viewer2DRef.current = viewer;
 
-        viewer.controls.enableRotate =
-          false;
-
-        viewer.controls.enableZoom =
-          false;
-
-        viewer.controls.enablePan =
-          false;
-
+        viewer.controls.enableRotate = false;
+        viewer.controls.enableZoom = false;
+        viewer.controls.enablePan = false;
         viewer.animation = null;
 
-        viewer.camera.position.set(
-          0,
-          0,
-          35
-        );
-
-        viewer.camera.lookAt(
-          0,
-          0,
-          0
-        );
+        viewer.camera.position.set(0, 0, 35);
+        viewer.camera.lookAt(0, 0, 0);
 
         if (user.skinId) {
           await viewer.loadSkin(
@@ -283,60 +320,45 @@ export default function Dashboard() {
   ]);
 
   // --------------------------------------------------
-  // UPLOAD
+  // UPLOAD SKIN
   // --------------------------------------------------
 
   async function uploadSkin(event) {
     const file =
       event.target.files?.[0];
 
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     if (file.type !== "image/png") {
       alert(
         "Only PNG files are allowed."
       );
-
       event.target.value = "";
-
       return;
     }
 
-    if (
-      file.size >
-      2 * 1024 * 1024
-    ) {
+    if (file.size > 2 * 1024 * 1024) {
       alert(
         "Maximum skin size is 2 MB."
       );
-
       event.target.value = "";
-
       return;
     }
 
     setUploading(true);
 
     try {
-      const formData =
-        new FormData();
+      const formData = new FormData();
+      formData.append("file", file);
 
-      formData.append(
-        "file",
-        file
+      const response = await fetch(
+        "/api/skin",
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData
+        }
       );
-
-      const response =
-        await fetch(
-          "/api/skin",
-          {
-            method: "POST",
-            credentials: "include",
-            body: formData
-          }
-        );
 
       const data =
         await response.json();
@@ -346,46 +368,33 @@ export default function Dashboard() {
           data.error ||
             "Upload failed."
         );
-
         return;
       }
 
       const skinId =
         data.skin.id;
 
-      setSkins(
-        (oldSkins) => [
-          {
-            id: skinId,
-            filename:
-              data.skin.filename,
-            model:
-              data.skin.model,
-            size:
-              data.skin.size
-          },
-          ...oldSkins.filter(
-            (skin) => {
-              const id =
-                typeof skin ===
-                "string"
-                  ? skin
-                  : skin.id;
+      setSkins((oldSkins) => [
+        {
+          id: skinId,
+          filename: data.skin.filename,
+          model: data.skin.model,
+          size: data.skin.size
+        },
+        ...oldSkins.filter((skin) => {
+          const id =
+            typeof skin === "string"
+              ? skin
+              : skin.id;
 
-              return (
-                id !== skinId
-              );
-            }
-          )
-        ]
-      );
-
-      setUser(
-        (oldUser) => ({
-          ...oldUser,
-          skinId
+          return id !== skinId;
         })
-      );
+      ]);
+
+      setUser((oldUser) => ({
+        ...oldUser,
+        skinId
+      }));
     } catch (error) {
       console.error(
         "Upload error:",
@@ -405,37 +414,28 @@ export default function Dashboard() {
   // LOAD SKIN
   // --------------------------------------------------
 
-  async function loadSkin(
-    skinId
-  ) {
-    if (
-      skinId ===
-      user?.skinId
-    ) {
+  async function loadSkin(skinId) {
+    if (skinId === user?.skinId) {
       return;
     }
 
-    setLoadingSkin(
-      skinId
-    );
+    setLoadingSkin(skinId);
 
     try {
-      const response =
-        await fetch(
-          "/api/skin/load",
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
-            body:
-              JSON.stringify({
-                skinId
-              })
-          }
-        );
+      const response = await fetch(
+        "/api/skin/load",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            skinId
+          })
+        }
+      );
 
       const data =
         await response.json();
@@ -445,17 +445,13 @@ export default function Dashboard() {
           data.error ||
             "Failed to load skin."
         );
-
         return;
       }
 
-      setUser(
-        (oldUser) => ({
-          ...oldUser,
-          skinId:
-            data.activeSkin
-        })
-      );
+      setUser((oldUser) => ({
+        ...oldUser,
+        skinId: data.activeSkin
+      }));
     } catch (error) {
       console.error(
         "Load skin error:",
@@ -474,39 +470,31 @@ export default function Dashboard() {
   // DELETE SKIN
   // --------------------------------------------------
 
-  async function deleteSkin(
-    skinId
-  ) {
+  async function deleteSkin(skinId) {
     const confirmed =
       window.confirm(
         "Delete this skin permanently?\n\nThe skin will also be removed from the Community."
       );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    setDeletingSkin(
-      skinId
-    );
+    setDeletingSkin(skinId);
 
     try {
-      const response =
-        await fetch(
-          "/api/skin/delete",
-          {
-            method: "DELETE",
-            credentials: "include",
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
-            body:
-              JSON.stringify({
-                skinId
-              })
-          }
-        );
+      const response = await fetch(
+        "/api/skin/delete",
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            skinId
+          })
+        }
+      );
 
       const data =
         await response.json();
@@ -516,43 +504,28 @@ export default function Dashboard() {
           data.error ||
             "Failed to delete skin."
         );
-
         return;
       }
 
-      setSkins(
-        (oldSkins) =>
-          oldSkins.filter(
-            (skin) => {
-              const id =
-                typeof skin ===
-                "string"
-                  ? skin
-                  : skin.id;
+      setSkins((oldSkins) =>
+        oldSkins.filter((skin) => {
+          const id =
+            typeof skin === "string"
+              ? skin
+              : skin.id;
 
-              return (
-                id !== skinId
-              );
-            }
-          )
-      );
-
-      setUser(
-        (oldUser) => ({
-          ...oldUser,
-          skinId:
-            data.activeSkin ||
-            null
+          return id !== skinId;
         })
       );
 
-      if (
-        postModalSkin ===
-        skinId
-      ) {
-        setPostModalSkin(
-          null
-        );
+      setUser((oldUser) => ({
+        ...oldUser,
+        skinId:
+          data.activeSkin || null
+      }));
+
+      if (postModalSkin === skinId) {
+        setPostModalSkin(null);
       }
     } catch (error) {
       console.error(
@@ -564,24 +537,18 @@ export default function Dashboard() {
         "Failed to delete skin."
       );
     } finally {
-      setDeletingSkin(
-        null
-      );
+      setDeletingSkin(null);
     }
   }
 
   // --------------------------------------------------
-  // OPEN POST MODAL
+  // POST MODAL
   // --------------------------------------------------
 
-  function openPostModal(
-    skinId
-  ) {
+  function openPostModal(skinId) {
     setPostTitle("");
     setPostDescription("");
-    setPostModalSkin(
-      skinId
-    );
+    setPostModalSkin(skinId);
   }
 
   // --------------------------------------------------
@@ -589,44 +556,35 @@ export default function Dashboard() {
   // --------------------------------------------------
 
   async function postSkin() {
-    if (!postModalSkin) {
-      return;
-    }
+    if (!postModalSkin) return;
 
     if (!postTitle.trim()) {
       alert(
         "Please enter a title."
       );
-
       return;
     }
 
-    setPostingSkin(
-      postModalSkin
-    );
+    setPostingSkin(postModalSkin);
 
     try {
-      const response =
-        await fetch(
-          "/api/posts",
-          {
-            method: "POST",
-            credentials: "include",
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
-            body:
-              JSON.stringify({
-                skinId:
-                  postModalSkin,
-                title:
-                  postTitle.trim(),
-                description:
-                  postDescription.trim()
-              })
-          }
-        );
+      const response = await fetch(
+        "/api/posts",
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            skinId: postModalSkin,
+            title: postTitle.trim(),
+            description:
+              postDescription.trim()
+          })
+        }
+      );
 
       const data =
         await response.json();
@@ -636,7 +594,6 @@ export default function Dashboard() {
           data.error ||
             "Failed to post skin."
         );
-
         return;
       }
 
@@ -644,10 +601,7 @@ export default function Dashboard() {
         "Skin posted successfully!"
       );
 
-      setPostModalSkin(
-        null
-      );
-
+      setPostModalSkin(null);
       setPostTitle("");
       setPostDescription("");
     } catch (error) {
@@ -660,11 +614,56 @@ export default function Dashboard() {
         "Failed to post skin."
       );
     } finally {
-      setPostingSkin(
-        null
-      );
+      setPostingSkin(null);
     }
   }
+
+  // --------------------------------------------------
+  // COMMON STYLES
+  // --------------------------------------------------
+
+  const pageStyle = {
+    minHeight: "100vh",
+    padding: "30px",
+    boxSizing: "border-box",
+    fontFamily: "Arial, sans-serif",
+    background: colors.background,
+    color: colors.text,
+    transition:
+      "background 0.2s ease, color 0.2s ease"
+  };
+
+  const buttonStyle = {
+    padding: "10px 16px",
+    borderRadius: "8px",
+    border:
+      `1px solid ${colors.border}`,
+    background: colors.button,
+    color: colors.text,
+    cursor: "pointer",
+    fontWeight: "600"
+  };
+
+  const smallButtonStyle = {
+    padding: "8px 12px",
+    borderRadius: "7px",
+    border:
+      `1px solid ${colors.border}`,
+    background: colors.button,
+    color: colors.text,
+    cursor: "pointer"
+  };
+
+  const inputStyle = {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px",
+    border:
+      `1px solid ${colors.border}`,
+    borderRadius: "8px",
+    background: colors.input,
+    color: colors.text
+  };
 
   // --------------------------------------------------
   // LOADING
@@ -674,12 +673,10 @@ export default function Dashboard() {
     return (
       <main
         style={{
-          minHeight: "100vh",
+          ...pageStyle,
           display: "flex",
           justifyContent: "center",
-          alignItems: "center",
-          fontFamily:
-            "Arial, sans-serif"
+          alignItems: "center"
         }}
       >
         <h1>
@@ -694,14 +691,7 @@ export default function Dashboard() {
   // --------------------------------------------------
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        padding: "30px",
-        fontFamily:
-          "Arial, sans-serif"
-      }}
-    >
+    <main style={pageStyle}>
       {/* PROFILE HEADER */}
 
       <div
@@ -711,7 +701,8 @@ export default function Dashboard() {
           justifyContent:
             "space-between",
           gap: "20px",
-          marginBottom: "30px"
+          marginBottom: "30px",
+          flexWrap: "wrap"
         }}
       >
         <div
@@ -736,8 +727,7 @@ export default function Dashboard() {
               border: "none",
               borderRadius: "50%",
               overflow: "hidden",
-              background:
-                "#eeeeee",
+              background: colors.viewer,
               cursor: "pointer",
               flexShrink: 0
             }}
@@ -764,19 +754,19 @@ export default function Dashboard() {
                 margin: 0
               }}
             >
-              KrispySkin
-              Dashboard
+              KrispySkin Dashboard
             </h1>
 
             <p
               style={{
-                margin:
-                  "6px 0 0"
+                margin: "6px 0 0",
+                color: colors.muted
               }}
             >
               Welcome,{" "}
               <strong>
-                {user?.username}
+                {user?.username ||
+                  "User"}
               </strong>
             </p>
           </div>
@@ -789,28 +779,13 @@ export default function Dashboard() {
               "/account/settings"
             )
           }
-          style={{
-            padding:
-              "10px 16px",
-            borderRadius:
-              "8px",
-            border:
-              "1px solid #ccc",
-            background:
-              "#fff",
-            cursor:
-              "pointer",
-            fontWeight:
-              "600"
-          }}
+          style={buttonStyle}
         >
           Account Settings
         </button>
       </div>
 
-      <h2>
-        Your Skin
-      </h2>
+      <h2>Your Skin</h2>
 
       {/* VIEW SWITCHER */}
 
@@ -818,26 +793,18 @@ export default function Dashboard() {
         style={{
           display: "flex",
           gap: "10px",
-          marginBottom:
-            "15px"
+          marginBottom: "15px"
         }}
       >
         <button
+          type="button"
           onClick={() =>
             setViewMode("3d")
           }
           style={{
-            padding:
-              "10px 22px",
-            borderRadius:
-              "8px",
-            border:
-              "1px solid #ccc",
-            cursor:
-              "pointer",
+            ...buttonStyle,
             fontWeight:
-              viewMode ===
-              "3d"
+              viewMode === "3d"
                 ? "bold"
                 : "normal"
           }}
@@ -846,21 +813,14 @@ export default function Dashboard() {
         </button>
 
         <button
+          type="button"
           onClick={() =>
             setViewMode("2d")
           }
           style={{
-            padding:
-              "10px 22px",
-            borderRadius:
-              "8px",
-            border:
-              "1px solid #ccc",
-            cursor:
-              "pointer",
+            ...buttonStyle,
             fontWeight:
-              viewMode ===
-              "2d"
+              viewMode === "2d"
                 ? "bold"
                 : "normal"
           }}
@@ -878,13 +838,11 @@ export default function Dashboard() {
             maxWidth: "100%",
             height: "500px",
             background:
-              "#eeeeee",
+              colors.viewer,
             border:
-              "1px solid #cccccc",
-            borderRadius:
-              "14px",
-            overflow:
-              "hidden"
+              `1px solid ${colors.border}`,
+            borderRadius: "14px",
+            overflow: "hidden"
           }}
         >
           <canvas
@@ -892,12 +850,9 @@ export default function Dashboard() {
             width={350}
             height={500}
             style={{
-              display:
-                "block",
-              width:
-                "100%",
-              height:
-                "100%"
+              display: "block",
+              width: "100%",
+              height: "100%"
             }}
           />
         </div>
@@ -912,13 +867,11 @@ export default function Dashboard() {
             maxWidth: "100%",
             height: "500px",
             background:
-              "#eeeeee",
+              colors.viewer,
             border:
-              "1px solid #cccccc",
-            borderRadius:
-              "14px",
-            overflow:
-              "hidden"
+              `1px solid ${colors.border}`,
+            borderRadius: "14px",
+            overflow: "hidden"
           }}
         >
           <canvas
@@ -926,12 +879,9 @@ export default function Dashboard() {
             width={350}
             height={500}
             style={{
-              display:
-                "block",
-              width:
-                "100%",
-              height:
-                "100%"
+              display: "block",
+              width: "100%",
+              height: "100%"
             }}
           />
         </div>
@@ -940,8 +890,7 @@ export default function Dashboard() {
       <p>
         Active Skin:{" "}
         <strong>
-          {user?.skinId ||
-            "None"}
+          {user?.skinId || "None"}
         </strong>
       </p>
 
@@ -949,8 +898,7 @@ export default function Dashboard() {
 
       <div
         style={{
-          marginTop:
-            "20px"
+          marginTop: "20px"
         }}
       >
         <strong>
@@ -962,15 +910,10 @@ export default function Dashboard() {
         <input
           type="file"
           accept="image/png"
-          disabled={
-            uploading
-          }
-          onChange={
-            uploadSkin
-          }
+          disabled={uploading}
+          onChange={uploadSkin}
           style={{
-            marginTop:
-              "10px"
+            marginTop: "10px"
           }}
         />
       </div>
@@ -979,187 +922,172 @@ export default function Dashboard() {
 
       <section
         style={{
-          marginTop:
-            "35px"
+          marginTop: "35px"
         }}
       >
-        <h2>
-          My Skins
-        </h2>
+        <h2>My Skins</h2>
 
-        {skins.length ===
-        0 ? (
-          <p>
-            You haven't
-            saved any skins
-            yet.
+        {skins.length === 0 ? (
+          <p
+            style={{
+              color: colors.muted
+            }}
+          >
+            You haven't saved any
+            skins yet.
           </p>
         ) : (
           <div
             style={{
-              display:
-                "grid",
+              display: "grid",
               gridTemplateColumns:
                 "repeat(auto-fill, minmax(240px, 1fr))",
               gap: "15px"
             }}
           >
-            {skins.map(
-              (skin) => {
-                const skinId =
-                  typeof skin ===
-                  "string"
-                    ? skin
-                    : skin.id;
+            {skins.map((skin) => {
+              const skinId =
+                typeof skin === "string"
+                  ? skin
+                  : skin.id;
 
-                const filename =
-                  typeof skin ===
-                  "string"
-                    ? skin
-                    : skin.filename;
+              const filename =
+                typeof skin === "string"
+                  ? skin
+                  : skin.filename;
 
-                const active =
-                  skinId ===
-                  user?.skinId;
+              const active =
+                skinId ===
+                user?.skinId;
 
-                return (
+              return (
+                <div
+                  key={skinId}
+                  style={{
+                    padding: "15px",
+                    border:
+                      `1px solid ${colors.border}`,
+                    borderRadius: "12px",
+                    background:
+                      active
+                        ? colors.active
+                        : colors.card,
+                    color: colors.text
+                  }}
+                >
+                  <strong>
+                    {active
+                      ? "Active Skin"
+                      : "Saved Skin"}
+                  </strong>
+
                   <div
-                    key={
-                      skinId
-                    }
                     style={{
-                      padding:
-                        "15px",
-                      border:
-                        "1px solid #ccc",
-                      borderRadius:
-                        "12px",
-                      background:
-                        active
-                          ? "#e9ffe9"
-                          : "#fff"
+                      marginTop: "6px",
+                      fontSize: "12px",
+                      overflow: "hidden",
+                      textOverflow:
+                        "ellipsis",
+                      whiteSpace:
+                        "nowrap",
+                      color:
+                        colors.muted
                     }}
                   >
-                    <strong>
-                      {active
-                        ? "Active Skin"
-                        : "Saved Skin"}
-                    </strong>
+                    {filename ||
+                      skinId}
+                  </div>
 
-                    <div
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "7px",
+                      marginTop: "12px"
+                    }}
+                  >
+                    <button
+                      type="button"
+                      disabled={
+                        active ||
+                        loadingSkin ===
+                          skinId
+                      }
+                      onClick={() =>
+                        loadSkin(
+                          skinId
+                        )
+                      }
                       style={{
-                        marginTop:
-                          "6px",
-                        fontSize:
-                          "12px",
-                        overflow:
-                          "hidden",
-                        textOverflow:
-                          "ellipsis",
-                        whiteSpace:
-                          "nowrap"
-                      }}
-                    >
-                      {filename ||
-                        skinId}
-                    </div>
-
-                    <div
-                      style={{
-                        display:
-                          "flex",
-                        flexWrap:
-                          "wrap",
-                        gap: "7px",
-                        marginTop:
-                          "12px"
-                      }}
-                    >
-                      <button
-                        disabled={
+                        ...smallButtonStyle,
+                        opacity:
                           active ||
                           loadingSkin ===
                             skinId
-                        }
-                        onClick={() =>
-                          loadSkin(
-                            skinId
-                          )
-                        }
-                        style={{
-                          padding:
-                            "8px 12px",
-                          borderRadius:
-                            "7px",
-                          border:
-                            "1px solid #ccc",
-                          cursor:
-                            "pointer"
-                        }}
-                      >
-                        {active
-                          ? "Active"
-                          : loadingSkin ===
-                            skinId
-                          ? "Loading..."
-                          : "Load"}
-                      </button>
+                            ? 0.5
+                            : 1
+                      }}
+                    >
+                      {active
+                        ? "Active"
+                        : loadingSkin ===
+                          skinId
+                        ? "Loading..."
+                        : "Load"}
+                    </button>
 
-                      <button
-                        disabled={
+                    <button
+                      type="button"
+                      disabled={
+                        postingSkin ===
+                        skinId
+                      }
+                      onClick={() =>
+                        openPostModal(
+                          skinId
+                        )
+                      }
+                      style={{
+                        ...smallButtonStyle,
+                        opacity:
                           postingSkin ===
                           skinId
-                        }
-                        onClick={() =>
-                          openPostModal(
-                            skinId
-                          )
-                        }
-                        style={{
-                          padding:
-                            "8px 12px",
-                          borderRadius:
-                            "7px",
-                          border:
-                            "1px solid #ccc",
-                          cursor:
-                            "pointer"
-                        }}
-                      >
-                        Post
-                      </button>
+                            ? 0.5
+                            : 1
+                      }}
+                    >
+                      Post
+                    </button>
 
-                      <button
-                        disabled={
+                    <button
+                      type="button"
+                      disabled={
+                        deletingSkin ===
+                        skinId
+                      }
+                      onClick={() =>
+                        deleteSkin(
+                          skinId
+                        )
+                      }
+                      style={{
+                        ...smallButtonStyle,
+                        opacity:
                           deletingSkin ===
                           skinId
-                        }
-                        onClick={() =>
-                          deleteSkin(
-                            skinId
-                          )
-                        }
-                        style={{
-                          padding:
-                            "8px 12px",
-                          borderRadius:
-                            "7px",
-                          border:
-                            "1px solid #ccc",
-                          cursor:
-                            "pointer"
-                        }}
-                      >
-                        {deletingSkin ===
-                        skinId
-                          ? "Deleting..."
-                          : "Delete"}
-                      </button>
-                    </div>
+                            ? 0.5
+                            : 1
+                      }}
+                    >
+                      {deletingSkin ===
+                      skinId
+                        ? "Deleting..."
+                        : "Delete"}
+                    </button>
                   </div>
-                );
-              }
-            )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -1168,8 +1096,7 @@ export default function Dashboard() {
 
       <div
         style={{
-          marginTop:
-            "35px"
+          marginTop: "35px"
         }}
       >
         <a
@@ -1179,14 +1106,18 @@ export default function Dashboard() {
               "inline-block",
             padding:
               "11px 18px",
-            borderRadius:
-              "8px",
+            borderRadius: "8px",
             background:
-              "#111",
+              darkMode
+                ? "#eee"
+                : "#111",
             color:
-              "#fff",
+              darkMode
+                ? "#111"
+                : "#fff",
             textDecoration:
-              "none"
+              "none",
+            fontWeight: "600"
           }}
         >
           Browse Community
@@ -1198,47 +1129,44 @@ export default function Dashboard() {
       {postModalSkin && (
         <div
           style={{
-            position:
-              "fixed",
+            position: "fixed",
             inset: 0,
             background:
               "rgba(0,0,0,0.55)",
-            display:
-              "flex",
+            display: "flex",
             justifyContent:
               "center",
-            alignItems:
-              "center",
-            padding:
-              "20px",
-            zIndex:
-              9999
+            alignItems: "center",
+            padding: "20px",
+            zIndex: 9999
           }}
         >
           <div
             style={{
-              width:
-                "100%",
-              maxWidth:
-                "450px",
+              width: "100%",
+              maxWidth: "450px",
               background:
-                "#fff",
-              borderRadius:
-                "14px",
-              padding:
-                "25px",
+                colors.card,
+              color: colors.text,
+              borderRadius: "14px",
+              padding: "25px",
               boxSizing:
-                "border-box"
+                "border-box",
+              border:
+                `1px solid ${colors.border}`
             }}
           >
             <h2>
               Post Skin
             </h2>
 
-            <p>
-              Share this skin
-              with the
-              KrispySkin
+            <p
+              style={{
+                color: colors.muted
+              }}
+            >
+              Share this skin with
+              the KrispySkin
               community.
             </p>
 
@@ -1247,34 +1175,19 @@ export default function Dashboard() {
             </label>
 
             <input
-              value={
-                postTitle
-              }
-              onChange={(
-                event
-              ) =>
+              value={postTitle}
+              onChange={(event) =>
                 setPostTitle(
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               maxLength={100}
               placeholder="My Awesome Skin"
               style={{
-                width:
-                  "100%",
-                boxSizing:
-                  "border-box",
-                marginTop:
-                  "6px",
+                ...inputStyle,
+                marginTop: "6px",
                 marginBottom:
-                  "15px",
-                padding:
-                  "10px",
-                border:
-                  "1px solid #ccc",
-                borderRadius:
-                  "8px"
+                  "15px"
               }}
             />
 
@@ -1283,104 +1196,154 @@ export default function Dashboard() {
             </label>
 
             <textarea
-              value={
-                postDescription
-              }
-              onChange={(
-                event
-              ) =>
+              value={postDescription}
+              onChange={(event) =>
                 setPostDescription(
-                  event.target
-                    .value
+                  event.target.value
                 )
               }
               maxLength={500}
               rows={5}
               placeholder="Tell people about your skin..."
               style={{
-                width:
-                  "100%",
-                boxSizing:
-                  "border-box",
-                marginTop:
-                  "6px",
-                padding:
-                  "10px",
-                border:
-                  "1px solid #ccc",
-                borderRadius:
-                  "8px",
-                resize:
-                  "vertical"
+                ...inputStyle,
+                marginTop: "6px",
+                resize: "vertical"
               }}
             />
 
             <div
               style={{
-                display:
-                  "flex",
+                display: "flex",
                 justifyContent:
                   "flex-end",
                 gap: "10px",
-                marginTop:
-                  "20px"
+                marginTop: "20px"
               }}
             >
-              <button
-                onClick={() =>
-                  setPostModalSkin(
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPostModalSkin(
+                      null
+                    )
+                  }
+                  disabled={
+                    postingSkin !==
                     null
-                  )
-                }
-                disabled={
-                  postingSkin !==
-                  null
-                }
-                style={{
-                  padding:
-                    "10px 15px",
-                  borderRadius:
-                    "8px",
-                  border:
-                    "1px solid #ccc",
-                  cursor:
-                    "pointer"
-                }}
-              >
-                Cancel
-              </button>
+                  }
+                  style={{
+                    ...smallButtonStyle,
+                    opacity:
+                      postingSkin !==
+                      null
+                        ? 0.5
+                        : 1
+                  }}
+                >
+                  Cancel
+                </button>
 
-              <button
-                onClick={
-                  postSkin
-                }
-                disabled={
-                  postingSkin !==
-                  null
-                }
-                style={{
-                  padding:
-                    "10px 15px",
-                  borderRadius:
-                    "8px",
-                  border:
-                    "1px solid #111",
-                  background:
-                    "#111",
-                  color:
-                    "#fff",
-                  cursor:
-                    "pointer"
-                }}
-              >
-                {postingSkin
-                  ? "Posting..."
-                  : "Post Skin"}
-              </button>
+                <button
+                  type="button"
+                  onClick={postSkin}
+                  disabled={
+                    postingSkin !==
+                    null
+                  }
+                  style={{
+                    ...smallButtonStyle,
+                    background:
+                      darkMode
+                        ? "#eee"
+                        : "#111",
+                    color:
+                      darkMode
+                        ? "#111"
+                        : "#fff",
+                    border:
+                      `1px solid ${
+                        darkMode
+                          ? "#eee"
+                          : "#111"
+                      }`,
+                    opacity:
+                      postingSkin !==
+                      null
+                        ? 0.5
+                        : 1
+                  }}
+                >
+                  {postingSkin
+                    ? "Posting..."
+                    : "Post Skin"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+      {/* MOBILE / DARK MODE OVERRIDES */}
+
+      <style jsx global>{`
+        html,
+        body {
+          margin: 0;
+          padding: 0;
+        }
+
+        body {
+          background: ${
+            darkMode ? "#111" : "#fff"
+          };
+          color: ${
+            darkMode ? "#eee" : "#171717"
+          };
+          transition:
+            background 0.2s ease,
+            color 0.2s ease;
+        }
+
+        input[type="file"] {
+          color: ${
+            darkMode ? "#eee" : "#171717"
+          };
+        }
+
+        input[type="file"]::file-selector-button {
+          padding: 8px 12px;
+          margin-right: 8px;
+          border-radius: 7px;
+          border: 1px solid ${
+            darkMode ? "#444" : "#ccc"
+          };
+          background: ${
+            darkMode ? "#252525" : "#fff"
+          };
+          color: ${
+            darkMode ? "#eee" : "#171717"
+          };
+          cursor: pointer;
+        }
+
+        button:disabled {
+          cursor: not-allowed !important;
+        }
+
+        @media (max-width: 600px) {
+          main {
+            padding: 20px 14px !important;
+          }
+
+          h1 {
+            font-size: 26px;
+          }
+
+          h2 {
+            font-size: 21px;
+          }
+        }
+      `}</style>
     </main>
   );
-        }
+}
