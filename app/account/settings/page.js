@@ -8,387 +8,215 @@ export default function AccountSettings() {
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  const [activeSection, setActiveSection] =
-    useState("profile");
+  const [section, setSection] = useState("profile");
 
   const [username, setUsername] = useState("");
-  const [usernameLoading, setUsernameLoading] =
-    useState(false);
-
   const [email, setEmail] = useState("");
   const [emailCode, setEmailCode] = useState("");
-  const [emailStep, setEmailStep] =
-    useState("email");
-  const [emailLoading, setEmailLoading] =
-    useState(false);
+  const [emailStep, setEmailStep] = useState("email");
 
-  const [currentPassword, setCurrentPassword] =
-    useState("");
-  const [newPassword, setNewPassword] =
-    useState("");
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
-  const [passwordLoading, setPasswordLoading] =
-    useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [theme, setTheme] = useState("system");
-
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    async function loadAccount() {
+    async function load() {
       try {
-        const response = await fetch(
-          "/api/auth/me",
-          {
-            method: "GET",
-            credentials: "include",
-            cache: "no-store"
-          }
-        );
+        const response = await fetch("/api/auth/me", {
+          credentials: "include",
+          cache: "no-store"
+        });
 
         const data = await response.json();
 
-        if (
-          !response.ok ||
-          !data.authenticated
-        ) {
+        if (!response.ok || !data.authenticated) {
           router.replace("/login");
           return;
         }
 
         setUser(data.user);
-        setUsername(
-          data.user?.username || ""
-        );
-        setEmail(
-          data.user?.email || ""
-        );
+        setUsername(data.user?.username || "");
+        setEmail(data.user?.email || "");
       } catch (err) {
-        console.error(
-          "Account settings error:",
-          err
-        );
-
-        setError(
-          "Failed to load account information."
-        );
+        console.error(err);
+        setError("Failed to load account.");
       } finally {
         setLoading(false);
       }
     }
 
-    loadAccount();
+    load();
   }, [router]);
 
   useEffect(() => {
-    const savedTheme =
-      localStorage.getItem(
-        "krispyskin_theme"
-      );
+    const saved = localStorage.getItem("krispyskin_theme");
 
     if (
-      savedTheme === "light" ||
-      savedTheme === "dark" ||
-      savedTheme === "system"
+      saved === "light" ||
+      saved === "dark" ||
+      saved === "system"
     ) {
-      setTheme(savedTheme);
-      applyTheme(savedTheme);
+      setTheme(saved);
+      applyTheme(saved);
     }
   }, []);
 
   function applyTheme(value) {
     if (value === "system") {
-      document.documentElement.removeAttribute(
-        "data-theme"
+      document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.setAttribute(
+        "data-theme",
+        value
       );
-      return;
     }
-
-    document.documentElement.setAttribute(
-      "data-theme",
-      value
-    );
   }
 
   function changeTheme(value) {
     setTheme(value);
-
-    localStorage.setItem(
-      "krispyskin_theme",
-      value
-    );
-
+    localStorage.setItem("krispyskin_theme", value);
     applyTheme(value);
   }
 
-  function clearMessages() {
+  function clearStatus() {
     setMessage("");
     setError("");
   }
 
-  async function changeUsername(event) {
-    event.preventDefault();
+  async function api(path, body) {
+    const response = await fetch(path, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
 
-    clearMessages();
+    const data = await response.json();
 
-    if (!username.trim()) {
-      setError(
-        "Username is required."
+    if (!response.ok) {
+      throw new Error(
+        data.error || "Request failed."
       );
-      return;
     }
 
-    setUsernameLoading(true);
+    return data;
+  }
+
+  async function saveUsername(event) {
+    event.preventDefault();
+    clearStatus();
+    setBusy(true);
 
     try {
-      const response = await fetch(
+      const data = await api(
         "/api/account/username",
         {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-          body: JSON.stringify({
-            username: username.trim()
-          })
+          username: username.trim()
         }
       );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        setError(
-          data.error ||
-            "Failed to change username."
-        );
-        return;
-      }
 
       setUsername(data.username);
 
-      setUser((oldUser) => ({
-        ...oldUser,
+      setUser((old) => ({
+        ...old,
         username: data.username
       }));
 
-      setMessage(
-        "Username changed successfully."
-      );
+      setMessage("Username updated successfully.");
     } catch (err) {
-      console.error(
-        "Username change error:",
-        err
-      );
-
-      setError(
-        "Failed to change username."
-      );
+      setError(err.message);
     } finally {
-      setUsernameLoading(false);
+      setBusy(false);
     }
   }
 
-  async function sendEmailVerification(
-    event
-  ) {
+  async function sendEmail(event) {
     event.preventDefault();
-
-    clearMessages();
-
-    if (!email.trim()) {
-      setError(
-        "Email is required."
-      );
-      return;
-    }
-
-    setEmailLoading(true);
+    clearStatus();
+    setBusy(true);
 
     try {
-      const response = await fetch(
+      await api(
         "/api/account/email/send",
         {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-          body: JSON.stringify({
-            email: email.trim()
-          })
+          email: email.trim()
         }
       );
 
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        setError(
-          data.error ||
-            "Failed to send verification code."
-        );
-        return;
-      }
-
       setEmailStep("code");
-
       setMessage(
         "Verification code sent to your email."
       );
     } catch (err) {
-      console.error(
-        "Email verification error:",
-        err
-      );
-
-      setError(
-        "Failed to send verification email."
-      );
+      setError(err.message);
     } finally {
-      setEmailLoading(false);
+      setBusy(false);
     }
   }
 
   async function verifyEmail(event) {
     event.preventDefault();
-
-    clearMessages();
-
-    if (!emailCode.trim()) {
-      setError(
-        "Verification code is required."
-      );
-      return;
-    }
-
-    setEmailLoading(true);
+    clearStatus();
+    setBusy(true);
 
     try {
-      const response = await fetch(
+      const data = await api(
         "/api/account/email/verify",
         {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-          body: JSON.stringify({
-            email: email.trim(),
-            code: emailCode.trim()
-          })
+          email: email.trim(),
+          code: emailCode.trim()
         }
       );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        setError(
-          data.error ||
-            "Invalid verification code."
-        );
-        return;
-      }
 
       const verifiedEmail =
         data.email || email.trim();
 
       setEmail(verifiedEmail);
 
-      setUser((oldUser) => ({
-        ...oldUser,
+      setUser((old) => ({
+        ...old,
         email: verifiedEmail
       }));
 
       setEmailCode("");
       setEmailStep("email");
-
-      setMessage(
-        "Email address updated successfully."
-      );
+      setMessage("Email updated successfully.");
     } catch (err) {
-      console.error(
-        "Email verification error:",
-        err
-      );
-
-      setError(
-        "Failed to verify email."
-      );
+      setError(err.message);
     } finally {
-      setEmailLoading(false);
+      setBusy(false);
     }
   }
 
-
-  async function changePassword(event) {
+    async function changePassword(event) {
     event.preventDefault();
+    clearStatus();
 
-    clearMessages();
-
-    if (
-      !currentPassword ||
-      !newPassword ||
-      !confirmPassword
-    ) {
-      setError(
-        "All password fields are required."
-      );
+    if (newPassword.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError(
-        "New passwords do not match."
-      );
+      setError("New passwords do not match.");
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError(
-        "Password must be at least 8 characters."
-      );
-      return;
-    }
-
-    setPasswordLoading(true);
+    setBusy(true);
 
     try {
-      const response = await fetch(
-        "/api/account/password",
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-          body: JSON.stringify({
-            currentPassword,
-            newPassword,
-            confirmPassword
-          })
-        }
-      );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        setError(
-          data.error ||
-            "Failed to change password."
-        );
-        return;
-      }
+      await api("/api/account/password", {
+        currentPassword,
+        newPassword,
+        confirmPassword
+      });
 
       setCurrentPassword("");
       setNewPassword("");
@@ -402,22 +230,10 @@ export default function AccountSettings() {
         router.replace("/login");
       }, 1500);
     } catch (err) {
-      console.error(
-        "Password change error:",
-        err
-      );
-
-      setError(
-        "Failed to change password."
-      );
+      setError(err.message);
     } finally {
-      setPasswordLoading(false);
+      setBusy(false);
     }
-  }
-
-  function switchSection(section) {
-    clearMessages();
-    setActiveSection(section);
   }
 
   if (loading) {
@@ -425,16 +241,12 @@ export default function AccountSettings() {
       <main
         style={{
           minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily:
-            "Arial, sans-serif"
+          display: "grid",
+          placeItems: "center",
+          fontFamily: "Arial, sans-serif"
         }}
       >
-        <h1>
-          Loading account settings...
-        </h1>
+        <h1>Loading...</h1>
       </main>
     );
   }
@@ -444,758 +256,287 @@ export default function AccountSettings() {
       style={{
         minHeight: "100vh",
         padding: "30px",
-        fontFamily:
-          "Arial, sans-serif",
-        background:
-          "var(--background, #ffffff)",
-        color:
-          "var(--foreground, #111111)"
+        fontFamily: "Arial, sans-serif"
       }}
     >
       <div
         style={{
-          maxWidth: "1000px",
+          maxWidth: "800px",
           margin: "0 auto"
         }}
       >
         <button
           type="button"
-          onClick={() =>
-            router.push("/dashboard")
-          }
-          style={{
-            padding: "9px 15px",
-            borderRadius: "8px",
-            border:
-              "1px solid #ccc",
-            background:
-              "transparent",
-            cursor: "pointer",
-            marginBottom: "20px"
-          }}
+          onClick={() => router.push("/dashboard")}
         >
-          ← Back to Dashboard
+          ← Dashboard
         </button>
 
-        <h1>
-          Account Settings
-        </h1>
+        <h1>Account Settings</h1>
 
-        <p
-          style={{
-            color: "#666"
-          }}
-        >
-          Manage your KrispySkin account,
-          profile, security, and theme.
+        <p>
+          Signed in as{" "}
+          <strong>{user?.username}</strong>
         </p>
 
         {message && (
-          <div
-            style={{
-              padding: "12px 15px",
-              marginTop: "20px",
-              marginBottom: "15px",
-              borderRadius: "8px",
-              background:
-                "#e8f7e8",
-              border:
-                "1px solid #9bd39b",
-              color:
-                "#216b21"
-            }}
-          >
+          <p style={{ color: "green" }}>
             {message}
-          </div>
+          </p>
         )}
 
         {error && (
-          <div
-            style={{
-              padding: "12px 15px",
-              marginTop: "20px",
-              marginBottom: "15px",
-              borderRadius: "8px",
-              background:
-                "#ffecec",
-              border:
-                "1px solid #e0a0a0",
-              color:
-                "#9b2222"
-            }}
-          >
+          <p style={{ color: "red" }}>
             {error}
-          </div>
+          </p>
         )}
 
-        <div
+        <nav
           style={{
-            display: "grid",
-            gridTemplateColumns:
-              "220px 1fr",
-            gap: "25px",
-            marginTop: "30px"
+            display: "flex",
+            gap: "8px",
+            flexWrap: "wrap",
+            margin: "20px 0"
           }}
         >
-          <aside
-            style={{
-              border:
-                "1px solid #ddd",
-              borderRadius: "12px",
-              padding: "10px",
-              height: "fit-content"
-            }}
-          >
-            <button
-              type="button"
-              onClick={() =>
-                switchSection("profile")
+          {["profile", "security", "theme"].map(
+            (item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => {
+                  clearStatus();
+                  setSection(item);
+                }}
+              >
+                {item === "profile"
+                  ? "Profile"
+                  : item === "security"
+                  ? "Security"
+                  : "Theme"}
+              </button>
+            )
+          )}
+        </nav>
+
+        {section === "profile" && (
+          <section>
+            <h2>Profile</h2>
+
+            <form onSubmit={saveUsername}>
+              <label>Username</label>
+
+              <br />
+
+              <input
+                value={username}
+                onChange={(e) =>
+                  setUsername(e.target.value)
+                }
+                maxLength={24}
+                autoComplete="username"
+              />
+
+              <br />
+
+              <button
+                type="submit"
+                disabled={busy}
+              >
+                {busy
+                  ? "Saving..."
+                  : "Save Username"}
+              </button>
+            </form>
+
+            <hr />
+
+            <form
+              onSubmit={
+                emailStep === "email"
+                  ? sendEmail
+                  : verifyEmail
               }
-              style={{
-                width: "100%",
-                padding: "12px",
-                textAlign: "left",
-                border: "none",
-                borderRadius: "8px",
-                background:
-                  activeSection ===
-                  "profile"
-                    ? "#111"
-                    : "transparent",
-                color:
-                  activeSection ===
-                  "profile"
-                    ? "#fff"
-                    : "inherit",
-                cursor: "pointer"
-              }}
             >
-              Profile
-            </button>
+              <label>Email Address</label>
 
-            <button
-              type="button"
-              onClick={() =>
-                switchSection("security")
-              }
-              style={{
-                width: "100%",
-                padding: "12px",
-                textAlign: "left",
-                border: "none",
-                borderRadius: "8px",
-                background:
-                  activeSection ===
-                  "security"
-                    ? "#111"
-                    : "transparent",
-                color:
-                  activeSection ===
-                  "security"
-                    ? "#fff"
-                    : "inherit",
-                cursor: "pointer"
-              }}
-            >
-              Security
-            </button>
+              <br />
 
-            <button
-              type="button"
-              onClick={() =>
-                switchSection("theme")
-              }
-              style={{
-                width: "100%",
-                padding: "12px",
-                textAlign: "left",
-                border: "none",
-                borderRadius: "8px",
-                background:
-                  activeSection ===
-                  "theme"
-                    ? "#111"
-                    : "transparent",
-                color:
-                  activeSection ===
-                  "theme"
-                    ? "#fff"
-                    : "inherit",
-                cursor: "pointer"
-              }}
-            >
-              Theme
-            </button>
-          </aside>
+              <input
+                type="email"
+                value={email}
+                disabled={emailStep === "code"}
+                onChange={(e) =>
+                  setEmail(e.target.value)
+                }
+                autoComplete="email"
+              />
 
-          <section
-            style={{
-              border:
-                "1px solid #ddd",
-              borderRadius: "12px",
-              padding: "25px"
-            }}
-          >
-            {activeSection ===
-              "profile" && (
-              <>
-                <h2>
-                  Profile
-                </h2>
-
-                <p
-                  style={{
-                    color: "#666"
-                  }}
+              {emailStep === "email" ? (
+                <button
+                  type="submit"
+                  disabled={busy}
                 >
-                  Update your public
-                  KrispySkin profile
-                  information.
-                </p>
-
-                <form
-                  onSubmit={
-                    changeUsername
-                  }
-                  style={{
-                    marginTop:
-                      "25px"
-                  }}
-                >
-                  <label>
-                    Username
-                  </label>
+                  {busy
+                    ? "Sending..."
+                    : "Send Verification Code"}
+                </button>
+              ) : (
+                <>
+                  <br />
 
                   <input
-                    type="text"
-                    value={username}
-                    onChange={(event) =>
-                      setUsername(
-                        event.target.value
+                    value={emailCode}
+                    onChange={(e) =>
+                      setEmailCode(
+                        e.target.value
                       )
                     }
-                    maxLength={24}
-                    autoComplete="username"
-                    style={{
-                      display:
-                        "block",
-                      width:
-                        "100%",
-                      maxWidth:
-                        "500px",
-                      boxSizing:
-                        "border-box",
-                      marginTop:
-                        "7px",
-                      padding:
-                        "11px",
-                      border:
-                        "1px solid #ccc",
-                      borderRadius:
-                        "8px"
-                    }}
+                    maxLength={6}
+                    inputMode="numeric"
+                    placeholder="6-digit code"
+                    autoComplete="one-time-code"
                   />
 
                   <button
                     type="submit"
-                    disabled={
-                      usernameLoading
-                    }
-                    style={{
-                      marginTop:
-                        "12px",
-                      padding:
-                        "10px 18px",
-                      borderRadius:
-                        "8px",
-                      border: "none",
-                      background:
-                        "#111",
-                      color:
-                        "#fff",
-                      cursor:
-                        "pointer"
-                    }}
+                    disabled={busy}
                   >
-                    {usernameLoading
-                      ? "Saving..."
-                      : "Save Username"}
-                  </button>
-                </form>
-
-                <hr
-                  style={{
-                    margin:
-                      "30px 0",
-                    border: 0,
-                    borderTop:
-                      "1px solid #ddd"
-                  }}
-                />
-
-                <form
-                  onSubmit={
-                    emailStep ===
-                    "email"
-                      ? sendEmailVerification
-                      : verifyEmail
-                  }
-                >
-                  <label>
-                    Email Address
-                  </label>
-
-                  <input
-                    type="email"
-                    value={email}
-                    disabled={
-                      emailStep ===
-                      "code"
-                    }
-                    onChange={(event) =>
-                      setEmail(
-                        event.target.value
-                      )
-                    }
-                    autoComplete="email"
-                    style={{
-                      display:
-                        "block",
-                      width:
-                        "100%",
-                      maxWidth:
-                        "500px",
-                      boxSizing:
-                        "border-box",
-                      marginTop:
-                        "7px",
-                      padding:
-                        "11px",
-                      border:
-                        "1px solid #ccc",
-                      borderRadius:
-                        "8px"
-                    }}
-                  />
-
-                  {emailStep ===
-                    "email" ? (
-                    <button
-                      type="submit"
-                      disabled={
-                        emailLoading
-                      }
-                      style={{
-                        marginTop:
-                          "12px",
-                        padding:
-                          "10px 18px",
-                        borderRadius:
-                          "8px",
-                        border:
-                          "none",
-                        background:
-                          "#111",
-                        color:
-                          "#fff",
-                        cursor:
-                          "pointer"
-                      }}
-                    >
-                      {emailLoading
-                        ? "Sending..."
-                        : "Send Verification Code"}
-                    </button>
-                  ) : (
-                    <>
-                      <input
-                        type="text"
-                        value={
-                          emailCode
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          setEmailCode(
-                            event.target
-                              .value
-                          )
-                        }
-                        maxLength={6}
-                        inputMode="numeric"
-                        placeholder="Enter 6-digit code"
-                        autoComplete="one-time-code"
-                        style={{
-                          display:
-                            "block",
-                          width:
-                            "100%",
-                          maxWidth:
-                            "500px",
-                          boxSizing:
-                            "border-box",
-                          marginTop:
-                            "12px",
-                          padding:
-                            "11px",
-                          border:
-                            "1px solid #ccc",
-                          borderRadius:
-                            "8px"
-                        }}
-                      />
-
-                      <div
-                        style={{
-                          display:
-                            "flex",
-                          gap: "10px",
-                          flexWrap:
-                            "wrap",
-                          marginTop:
-                            "12px"
-                        }}
-                      >
-                        <button
-                          type="submit"
-                          disabled={
-                            emailLoading
-                          }
-                          style={{
-                            padding:
-                              "10px 18px",
-                            borderRadius:
-                              "8px",
-                            border:
-                              "none",
-                            background:
-                              "#111",
-                            color:
-                              "#fff",
-                            cursor:
-                              "pointer"
-                          }}
-                        >
-                          {emailLoading
-                            ? "Verifying..."
-                            : "Verify Email"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmailStep(
-                              "email"
-                            );
-                            setEmailCode(
-                              ""
-                            );
-                            clearMessages();
-                          }}
-                          style={{
-                            padding:
-                              "10px 18px",
-                            borderRadius:
-                              "8px",
-                            border:
-                              "1px solid #ccc",
-                            background:
-                              "transparent",
-                            cursor:
-                              "pointer"
-                          }}
-                        >
-                          Change Email
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </form>
-              </>
-            )}
-
-            {activeSection ===
-              "security" && (
-              <>
-                <h2>
-                  Security
-                </h2>
-
-                <p
-                  style={{
-                    color: "#666"
-                  }}
-                >
-                  Change your account
-                  password.
-                </p>
-
-                <form
-                  onSubmit={
-                    changePassword
-                  }
-                  style={{
-                    marginTop:
-                      "25px"
-                  }}
-                >
-                  <label>
-                    Current Password
-                  </label>
-
-                  <input
-                    type="password"
-                    value={
-                      currentPassword
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setCurrentPassword(
-                        event.target
-                          .value
-                      )
-                    }
-                    autoComplete="current-password"
-                    style={{
-                      display:
-                        "block",
-                      width:
-                        "100%",
-                      maxWidth:
-                        "500px",
-                      boxSizing:
-                        "border-box",
-                      marginTop:
-                        "7px",
-                      padding:
-                        "11px",
-                      border:
-                        "1px solid #ccc",
-                      borderRadius:
-                        "8px"
-                    }}
-                  />
-
-                  <label
-                    style={{
-                      display:
-                        "block",
-                      marginTop:
-                        "15px"
-                    }}
-                  >
-                    New Password
-                  </label>
-
-                  <input
-                    type="password"
-                    value={
-                      newPassword
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setNewPassword(
-                        event.target
-                          .value
-                      )
-                    }
-                    autoComplete="new-password"
-                    style={{
-                      display:
-                        "block",
-                      width:
-                        "100%",
-                      maxWidth:
-                        "500px",
-                      boxSizing:
-                        "border-box",
-                      marginTop:
-                        "7px",
-                      padding:
-                        "11px",
-                      border:
-                        "1px solid #ccc",
-                      borderRadius:
-                        "8px"
-                    }}
-                  />
-
-                  <label
-                    style={{
-                      display:
-                        "block",
-                      marginTop:
-                        "15px"
-                    }}
-                  >
-                    Confirm New Password
-                  </label>
-
-                  <input
-                    type="password"
-                    value={
-                      confirmPassword
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setConfirmPassword(
-                        event.target
-                          .value
-                      )
-                    }
-                    autoComplete="new-password"
-                    style={{
-                      display:
-                        "block",
-                      width:
-                        "100%",
-                      maxWidth:
-                        "500px",
-                      boxSizing:
-                        "border-box",
-                      marginTop:
-                        "7px",
-                      padding:
-                        "11px",
-                      border:
-                        "1px solid #ccc",
-                      borderRadius:
-                        "8px"
-                    }}
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={
-
-
-                                  {activeSection === "theme" && (
-              <>
-                <h2>Theme</h2>
-
-                <p
-                  style={{
-                    color: "#666"
-                  }}
-                >
-                  Choose how KrispySkin should
-                  appear on your device.
-                </p>
-
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                    marginTop: "25px",
-                    maxWidth: "500px"
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changeTheme("system")
-                    }
-                    style={{
-                      padding: "14px",
-                      textAlign: "left",
-                      borderRadius: "10px",
-                      border:
-                        theme === "system"
-                          ? "2px solid #111"
-                          : "1px solid #ccc",
-                      background:
-                        "transparent",
-                      cursor: "pointer"
-                    }}
-                  >
-                    <strong>System</strong>
-
-                    <div
-                      style={{
-                        marginTop: "4px",
-                        fontSize: "13px",
-                        color: "#666"
-                      }}
-                    >
-                      Follow your device's
-                      light or dark mode.
-                    </div>
+                    {busy
+                      ? "Verifying..."
+                      : "Verify Email"}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() =>
-                      changeTheme("light")
-                    }
-                    style={{
-                      padding: "14px",
-                      textAlign: "left",
-                      borderRadius: "10px",
-                      border:
-                        theme === "light"
-                          ? "2px solid #111"
-                          : "1px solid #ccc",
-                      background:
-                        "#fff",
-                      color: "#111",
-                      cursor: "pointer"
+                    onClick={() => {
+                      setEmailStep("email");
+                      setEmailCode("");
+                      clearStatus();
                     }}
                   >
-                    <strong>Light</strong>
-
-                    <div
-                      style={{
-                        marginTop: "4px",
-                        fontSize: "13px",
-                        color: "#666"
-                      }}
-                    >
-                      Use the light theme.
-                    </div>
+                    Change Email
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changeTheme("dark")
-                    }
-                    style={{
-                      padding: "14px",
-                      textAlign: "left",
-                      borderRadius: "10px",
-                      border:
-                        theme === "dark"
-                          ? "2px solid #111"
-                          : "1px solid #555",
-                      background:
-                        "#181818",
-                      color: "#fff",
-                      cursor: "pointer"
-                    }}
-                  >
-                    <strong>Dark</strong>
-
-                    <div
-                      style={{
-                        marginTop: "4px",
-                        fontSize: "13px",
-                        color: "#aaa"
-                      }}
-                    >
-                      Use the dark theme.
-                    </div>
-                  </button>
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </form>
           </section>
-        </div>
+        )}
+
+        {section === "security" && (
+          <section>
+            <h2>Security</h2>
+
+            <form onSubmit={changePassword}>
+              <label>Current Password</label>
+
+              <br />
+
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) =>
+                  setCurrentPassword(
+                    e.target.value
+                  )
+                }
+                autoComplete="current-password"
+              />
+
+              <br />
+
+              <label>New Password</label>
+
+              <br />
+
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) =>
+                  setNewPassword(
+                    e.target.value
+                  )
+                }
+                autoComplete="new-password"
+              />
+
+              <br />
+
+              <label>
+                Confirm New Password
+              </label>
+
+              <br />
+
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) =>
+                  setConfirmPassword(
+                    e.target.value
+                  )
+                }
+                autoComplete="new-password"
+              />
+
+              <br />
+
+              <button
+                type="submit"
+                disabled={busy}
+              >
+                {busy
+                  ? "Changing..."
+                  : "Change Password"}
+              </button>
+            </form>
+          </section>
+        )}
+
+        {section === "theme" && (
+          <section>
+            <h2>Theme</h2>
+
+            <p>
+              Choose your preferred KrispySkin theme.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                flexWrap: "wrap"
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => changeTheme("system")}
+              >
+                System
+              </button>
+
+              <button
+                type="button"
+                onClick={() => changeTheme("light")}
+              >
+                Light
+              </button>
+
+              <button
+                type="button"
+                onClick={() => changeTheme("dark")}
+              >
+                Dark
+              </button>
+            </div>
+
+            <p>
+              Current theme:{" "}
+              <strong>{theme}</strong>
+            </p>
+          </section>
+        )}
       </div>
     </main>
   );
 }
-                  
