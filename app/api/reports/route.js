@@ -43,7 +43,6 @@ async function sendDiscordReport(report) {
 
   const postTitle =
     report.postTitle ||
-    report.title ||
     "Unknown post";
 
   const postId =
@@ -51,19 +50,23 @@ async function sendDiscordReport(report) {
     "Unknown";
 
   const reportId =
-    report.id;
+    report.id ||
+    "Unknown";
 
   const response =
     await fetch(
       `${DISCORD_API}/channels/${DISCORD_REPORT_CHANNEL_ID}/messages`,
       {
         method: "POST",
+
         headers: {
           Authorization:
             `Bot ${DISCORD_BOT_TOKEN}`,
+
           "Content-Type":
             "application/json"
         },
+
         body: JSON.stringify({
           embeds: [
             {
@@ -77,51 +80,63 @@ async function sendDiscordReport(report) {
                 {
                   name:
                     "Report ID",
+
                   value:
                     `\`${reportId}\``,
+
                   inline: false
                 },
 
                 {
                   name:
                     "Category",
+
                   value:
                     category,
+
                   inline: true
                 },
 
                 {
                   name:
                     "Reporter",
+
                   value:
                     username,
+
                   inline: true
                 },
 
                 {
                   name:
                     "Post",
+
                   value:
                     postTitle,
+
                   inline: false
                 },
 
                 {
                   name:
                     "Post ID",
+
                   value:
                     `\`${postId}\``,
+
                   inline: false
                 },
 
                 {
                   name:
                     "Reason",
+
                   value:
                     description.substring(
                       0,
                       1024
                     ),
+
                   inline: false
                 }
               ],
@@ -143,29 +158,41 @@ async function sendDiscordReport(report) {
               components: [
                 {
                   type: 2,
+
                   style: 2,
+
                   label:
                     "Dismiss",
+
+                  // Dismiss = REPORT ID
                   custom_id:
                     `report:dismiss:${reportId}`
                 },
 
                 {
                   type: 2,
+
                   style: 1,
+
                   label:
                     "Hide Post",
+
+                  // Hide = POST ID
                   custom_id:
-                    `report:hide:${reportId}`
+                    `report:hide:${postId}`
                 },
 
                 {
                   type: 2,
+
                   style: 4,
+
                   label:
                     "Delete Post",
+
+                  // Delete = POST ID
                   custom_id:
-                    `report:delete:${reportId}`
+                    `report:delete:${postId}`
                 }
               ]
             }
@@ -190,9 +217,7 @@ async function sendDiscordReport(report) {
 // POST REPORT
 // --------------------------------------------------
 
-export async function POST(
-  request
-) {
+export async function POST(request) {
   try {
     // ------------------------------------------------
     // SESSION
@@ -224,9 +249,11 @@ export async function POST(
       await clientPromise;
 
     const db =
-      client.db(
-        "krispyskin"
-      );
+      client.db("krispyskin");
+
+    // ------------------------------------------------
+    // CHECK SESSION
+    // ------------------------------------------------
 
     const session =
       await db
@@ -253,6 +280,10 @@ export async function POST(
         }
       );
     }
+
+    // ------------------------------------------------
+    // GET USER
+    // ------------------------------------------------
 
     const user =
       await db
@@ -283,22 +314,26 @@ export async function POST(
       await request.json();
 
     const postId =
-      typeof body.postId ===
+      typeof body?.postId ===
       "string"
         ? body.postId.trim()
         : "";
 
     const category =
-      typeof body.category ===
+      typeof body?.category ===
       "string"
         ? body.category.trim()
         : "other";
 
     const description =
-      typeof body.description ===
+      typeof body?.description ===
       "string"
         ? body.description.trim()
         : "";
+
+    // ------------------------------------------------
+    // VALIDATE POST ID
+    // ------------------------------------------------
 
     if (!postId) {
       return NextResponse.json(
@@ -417,8 +452,10 @@ export async function POST(
         .collection("reports")
         .findOne({
           postId,
+
           userId:
             user.id,
+
           status: {
             $in: [
               "pending",
@@ -451,7 +488,8 @@ export async function POST(
     // GET POST OWNER
     // ------------------------------------------------
 
-    let postOwner = null;
+    let postOwner =
+      null;
 
     if (post.userId) {
       postOwner =
@@ -471,6 +509,8 @@ export async function POST(
       id:
         reportId,
 
+      // IMPORTANT:
+      // This is the actual post ID.
       postId:
         postId,
 
@@ -502,12 +542,22 @@ export async function POST(
       status:
         "pending",
 
+      discordSent:
+        false,
+
+      discordMessageId:
+        null,
+
       createdAt:
         new Date(),
 
       updatedAt:
         new Date()
     };
+
+    // ------------------------------------------------
+    // SAVE REPORT
+    // ------------------------------------------------
 
     await db
       .collection("reports")
@@ -516,7 +566,7 @@ export async function POST(
       );
 
     // ------------------------------------------------
-    // SEND TO DISCORD
+    // SEND REPORT TO DISCORD
     // ------------------------------------------------
 
     let discordSent =
@@ -545,6 +595,7 @@ export async function POST(
             id:
               reportId
           },
+
           {
             $set: {
               discordSent:
@@ -571,13 +622,15 @@ export async function POST(
             id:
               reportId
           },
+
           {
             $set: {
               discordSent:
                 false,
 
               discordError:
-                discordError.message,
+                discordError?.message ||
+                "Unknown Discord error",
 
               updatedAt:
                 new Date()
@@ -598,6 +651,7 @@ export async function POST(
           id:
             reportId,
 
+          // Return the actual POST ID.
           postId:
             postId,
 
@@ -619,6 +673,7 @@ export async function POST(
         message:
           "Report submitted successfully."
       },
+
       {
         status: 201
       }
@@ -632,9 +687,11 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
+
         error:
           "Failed to submit report."
       },
+
       {
         status: 500
       }
@@ -652,7 +709,7 @@ function cryptoRandomId() {
 
   if (
     typeof crypto !==
-    "undefined" &&
+      "undefined" &&
     crypto.getRandomValues
   ) {
     crypto.getRandomValues(
