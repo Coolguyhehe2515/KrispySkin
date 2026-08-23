@@ -26,9 +26,10 @@ function safeEqual(a, b) {
 
 export async function POST(request) {
   try {
+    // Get the currently authenticated session.
     const sessionToken =
       request.cookies.get(
-        "krispyskin_session"
+        "krispy_skin_session"
       )?.value;
 
     if (!sessionToken) {
@@ -37,20 +38,30 @@ export async function POST(request) {
           success: false,
           error: "You must be logged in"
         },
-        { status: 401 }
+        {
+          status: 401
+        }
       );
     }
 
-    const body = await request.json();
+    // Read password fields.
+    const body =
+      await request.json();
 
     const currentPassword =
-      String(body.currentPassword || "");
+      String(
+        body.currentPassword || ""
+      );
 
     const newPassword =
-      String(body.newPassword || "");
+      String(
+        body.newPassword || ""
+      );
 
     const confirmPassword =
-      String(body.confirmPassword || "");
+      String(
+        body.confirmPassword || ""
+      );
 
     if (
       !currentPassword ||
@@ -60,69 +71,112 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error: "All password fields are required"
+          error:
+            "All password fields are required"
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
-    if (newPassword !== confirmPassword) {
+    // Make sure the new passwords match.
+    if (
+      newPassword !==
+      confirmPassword
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "New passwords do not match"
+          error:
+            "New passwords do not match"
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
-    if (newPassword.length < 8) {
+    // Enforce a minimum password length.
+    if (
+      newPassword.length < 8
+    ) {
       return NextResponse.json(
         {
           success: false,
           error:
             "Password must be at least 8 characters"
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
-    const client = await clientPromise;
-    const db = client.db("krispyskin");
+    const client =
+      await clientPromise;
 
+    const db =
+      client.db(
+        "krispyskin"
+      );
+
+    const sessions =
+      db.collection(
+        "sessions"
+      );
+
+    const users =
+      db.collection(
+        "users"
+      );
+
+    // Validate the current session.
     const session =
-      await db.collection("sessions").findOne({
-        token: sessionToken
+      await sessions.findOne({
+        token:
+          sessionToken
       });
 
     if (
       !session ||
-      new Date(session.expiresAt) <= new Date()
+      new Date(
+        session.expiresAt
+      ) <= new Date()
     ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Session expired"
+          error:
+            "Session expired"
         },
-        { status: 401 }
+        {
+          status: 401
+        }
       );
     }
 
+    // Find the authenticated user.
     const user =
-      await db.collection("users").findOne({
-        id: session.userId
+      await users.findOne({
+        id:
+          session.userId
       });
 
     if (!user) {
       return NextResponse.json(
         {
           success: false,
-          error: "User not found"
+          error:
+            "User not found"
         },
-        { status: 404 }
+        {
+          status: 404
+        }
       );
     }
 
+    // Verify the current password.
     const currentHash =
       hashPassword(
         currentPassword,
@@ -138,14 +192,20 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error: "Current password is incorrect"
+          error:
+            "Current password is incorrect"
         },
-        { status: 401 }
+        {
+          status: 401
+        }
       );
     }
 
+    // Generate a new salt for the new password.
     const newSalt =
-      crypto.randomBytes(16).toString("hex");
+      crypto
+        .randomBytes(16)
+        .toString("hex");
 
     const newHash =
       hashPassword(
@@ -153,28 +213,39 @@ export async function POST(request) {
         newSalt
       );
 
-    await db.collection("users").updateOne(
+    // Update the password.
+    await users.updateOne(
       {
-        id: user.id
+        id:
+          user.id
       },
       {
         $set: {
-          passwordSalt: newSalt,
-          passwordHash: newHash,
-          passwordChangedAt: new Date()
+          passwordSalt:
+            newSalt,
+
+          passwordHash:
+            newHash,
+
+          passwordChangedAt:
+            new Date()
         }
       }
     );
 
-    await db.collection("sessions").deleteMany({
-      userId: user.id
+    // Invalidate every existing session.
+    await sessions.deleteMany({
+      userId:
+        user.id
     });
 
-    const response = NextResponse.json({
-      success: true,
-      message:
-        "Password changed successfully. Please login again."
-    });
+    // Remove the current session cookie.
+    const response =
+      NextResponse.json({
+        success: true,
+        message:
+          "Password changed successfully. Please login again."
+      });
 
     response.cookies.delete(
       "krispyskin_session"
@@ -190,9 +261,12 @@ export async function POST(request) {
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to change password"
+        error:
+          "Failed to change password"
       },
-      { status: 500 }
+      {
+        status: 500
+      }
     );
   }
 }
