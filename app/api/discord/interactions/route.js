@@ -1,42 +1,11 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { MongoClient } from "mongodb";
+import clientPromise from "../../../lib/mongodb";
+
+export const runtime = "nodejs";
 
 const DISCORD_PUBLIC_KEY =
   process.env.DISCORD_PUBLIC_KEY;
-
-const MONGODB_URI =
-  process.env.MONGODB_URI;
-
-const DB_NAME =
-  "krispyskin";
-
-let clientPromise;
-
-if (MONGODB_URI) {
-  if (process.env.NODE_ENV === "development") {
-    if (!global._krispyMongoClientPromise) {
-      const client =
-        new MongoClient(MONGODB_URI);
-
-      global._krispyMongoClientPromise =
-        client.connect();
-    }
-
-    clientPromise =
-      global._krispyMongoClientPromise;
-  } else {
-    const client =
-      new MongoClient(MONGODB_URI);
-
-    clientPromise =
-      client.connect();
-  }
-}
-
-// --------------------------------------------------
-// DISCORD SIGNATURE VERIFICATION
-// --------------------------------------------------
 
 function verifyDiscordRequest(
   body,
@@ -101,10 +70,6 @@ function verifyDiscordRequest(
   }
 }
 
-// --------------------------------------------------
-// RESPONSE HELPERS
-// --------------------------------------------------
-
 function jsonResponse(
   data,
   status = 200
@@ -129,10 +94,6 @@ function ephemeralMessage(
   };
 }
 
-// --------------------------------------------------
-// CUSTOM ID PARSER
-// --------------------------------------------------
-
 function parseModerationAction(
   customId
 ) {
@@ -143,7 +104,9 @@ function parseModerationAction(
   const value =
     String(customId).trim();
 
+  // -------------------------------
   // DISMISS
+  // -------------------------------
 
   if (
     value === "report_dismiss" ||
@@ -156,7 +119,9 @@ function parseModerationAction(
     };
   }
 
+  // -------------------------------
   // HIDE
+  // -------------------------------
 
   const hidePrefixes = [
     "report_hide:",
@@ -172,20 +137,19 @@ function parseModerationAction(
     if (
       value.startsWith(prefix)
     ) {
-      const postId =
-        value.substring(
-          prefix.length
-        );
-
       return {
         action: "hide",
         postId:
-          postId || null
+          value.substring(
+            prefix.length
+          )
       };
     }
   }
 
+  // -------------------------------
   // DELETE
+  // -------------------------------
 
   const deletePrefixes = [
     "report_delete:",
@@ -201,25 +165,18 @@ function parseModerationAction(
     if (
       value.startsWith(prefix)
     ) {
-      const postId =
-        value.substring(
-          prefix.length
-        );
-
       return {
         action: "delete",
         postId:
-          postId || null
+          value.substring(
+            prefix.length
+          )
       };
     }
   }
 
   return null;
 }
-
-// --------------------------------------------------
-// MODERATOR CHECK
-// --------------------------------------------------
 
 function isModerator(
   interaction
@@ -240,26 +197,57 @@ function isModerator(
 }
 
 // --------------------------------------------------
-// MONGODB
+// FIND POST
 // --------------------------------------------------
 
-async function getDatabase() {
-  if (!MONGODB_URI) {
-    throw new Error(
-      "MONGODB_URI is not configured"
+async function findPost(
+  db,
+  postId
+) {
+  if (!postId) {
+    return null;
+  }
+
+  // Normal KrispySkin post ID.
+  let post =
+    await db.collection("posts").findOne({
+      id: postId
+    });
+
+  if (post) {
+    return post;
+  }
+
+  // Fallback for MongoDB ObjectId.
+  try {
+    if (
+      /^[a-fA-F0-9]{24}$/.test(
+        postId
+      )
+    ) {
+      const { ObjectId } =
+        await import("mongodb");
+
+      post =
+        await db
+          .collection("posts")
+          .findOne({
+            _id:
+              new ObjectId(postId)
+          });
+
+      if (post) {
+        return post;
+      }
+    }
+  } catch (error) {
+    console.error(
+      "ObjectId lookup failed:",
+      error
     );
   }
 
-  if (!clientPromise) {
-    throw new Error(
-      "MongoDB client is not initialized"
-    );
-  }
-
-  const client =
-    await clientPromise;
-
-  return client.db(DB_NAME);
+  return null;
 }
 
 // --------------------------------------------------
@@ -267,30 +255,41 @@ async function getDatabase() {
 // --------------------------------------------------
 
 async function hidePost(
+  db,
   postId,
   moderator
 ) {
-  const db =
-    await getDatabase();
+  const post =
+    await findPost(
+      db,
+      postId
+    );
 
-  const posts =
-    db.collection("posts");
+  if (!post) {
+    return {
+      success: false,
+      message:
+        `Post \`${postId}\` was not found.`
+    };
+  }
 
   const result =
-    await posts.updateOne(
-      {
-        id: postId
-      },
-      {
-        $set: {
-          hidden: true,
-          hiddenAt:
-            new Date(),
-          hiddenBy:
-            moderator
+    await db
+      .collection("posts")
+      .updateOne(
+        {
+          _id: post._id
+        },
+        {
+          $set: {
+            hidden: true,
+            hiddenAt:
+              new Date(),
+            hiddenBy:
+              moderator
+          }
         }
-      }
-    );
+      );
 
   if (
     result.matchedCount === 0
@@ -298,14 +297,14 @@ async function hidePost(
     return {
       success: false,
       message:
-        "Post was not found."
+        "Failed to update the post."
     };
   }
 
   return {
     success: true,
     message:
-      `Post \`${postId}\` has been hidden.`
+      `Post \`${post.id || postId}\` has been hidden.`
   };
 }
 
@@ -314,19 +313,29 @@ async function hidePost(
 // --------------------------------------------------
 
 async function deletePost(
-  postId,
-  moderator
+  db,
+  postId
 ) {
-  const db =
-    await getDatabase();
+  const post =
+    await findPost(
+      db,
+      postId
+    );
 
-  const posts =
-    db.collection("posts");
+  if (!post) {
+    return {
+      success: false,
+      message:
+        `Post \`${postId}\` was not found.`
+    };
+  }
 
   const result =
-    await posts.deleteOne({
-      id: postId
-    });
+    await db
+      .collection("posts")
+      .deleteOne({
+        _id: post._id
+      });
 
   if (
     result.deletedCount === 0
@@ -334,19 +343,19 @@ async function deletePost(
     return {
       success: false,
       message:
-        "Post was not found."
+        "Failed to delete the post."
     };
   }
 
   return {
     success: true,
     message:
-      `Post \`${postId}\` has been deleted.`
+      `Post \`${post.id || postId}\` has been deleted.`
   };
 }
 
 // --------------------------------------------------
-// POST HANDLER
+// POST
 // --------------------------------------------------
 
 export async function POST(
@@ -390,7 +399,7 @@ export async function POST(
       JSON.parse(body);
 
     // ------------------------------------------------
-    // DISCORD PING
+    // DISCORD VERIFICATION
     // ------------------------------------------------
 
     if (
@@ -402,7 +411,7 @@ export async function POST(
     }
 
     // ------------------------------------------------
-    // BUTTON INTERACTION
+    // BUTTON
     // ------------------------------------------------
 
     if (
@@ -433,7 +442,7 @@ export async function POST(
     );
 
     // ------------------------------------------------
-    // MODERATOR CHECK
+    // MODERATOR
     // ------------------------------------------------
 
     if (
@@ -449,7 +458,7 @@ export async function POST(
     }
 
     // ------------------------------------------------
-    // PARSE ACTION
+    // PARSE BUTTON
     // ------------------------------------------------
 
     const parsed =
@@ -480,13 +489,13 @@ export async function POST(
     ) {
       return jsonResponse(
         ephemeralMessage(
-          "Report dismissed."
+          `Report dismissed by **${username}**.`
         )
       );
     }
 
     // ------------------------------------------------
-    // POST ID CHECK
+    // POST ID
     // ------------------------------------------------
 
     if (!parsed.postId) {
@@ -496,6 +505,21 @@ export async function POST(
         )
       );
     }
+
+    console.log(
+      "Moderation target post:",
+      parsed.postId
+    );
+
+    // ------------------------------------------------
+    // DATABASE
+    // ------------------------------------------------
+
+    const client =
+      await clientPromise;
+
+    const db =
+      client.db("krispyskin");
 
     // ------------------------------------------------
     // HIDE
@@ -508,21 +532,16 @@ export async function POST(
       try {
         const result =
           await hidePost(
+            db,
             parsed.postId,
             username
           );
 
-        if (!result.success) {
-          return jsonResponse(
-            ephemeralMessage(
-              result.message
-            )
-          );
-        }
-
         return jsonResponse(
           ephemeralMessage(
-            `${result.message}\nModerator: **${username}**`
+            result.success
+              ? `${result.message}\nModerator: **${username}**`
+              : result.message
           )
         );
       } catch (error) {
@@ -550,21 +569,15 @@ export async function POST(
       try {
         const result =
           await deletePost(
-            parsed.postId,
-            username
+            db,
+            parsed.postId
           );
-
-        if (!result.success) {
-          return jsonResponse(
-            ephemeralMessage(
-              result.message
-            )
-          );
-        }
 
         return jsonResponse(
           ephemeralMessage(
-            `${result.message}\nModerator: **${username}**`
+            result.success
+              ? `${result.message}\nModerator: **${username}**`
+              : result.message
           )
         );
       } catch (error) {
