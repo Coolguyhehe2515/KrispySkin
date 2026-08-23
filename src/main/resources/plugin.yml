@@ -1,0 +1,7 @@
+name: KrispySkin
+version: 1.0.0
+main: com.krispyskin.plugin.KrispySkinPlugin
+api-version: '1.20'
+
+author: KrispyBRN
+description: KrispySkin Minecraft plugin
