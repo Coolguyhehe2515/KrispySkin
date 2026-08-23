@@ -44,24 +44,32 @@ async function sendResetEmail(email, code) {
   }
 
   const response = await fetch(
-    "https://api.resend.com/emails",
+    "https://api.brevo.com/v3/smtp/email",
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+        accept: "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json"
       },
       body: JSON.stringify({
-        from: fromEmail,
-        to: [email],
+        sender: {
+          name: "KrispySkin",
+          email: fromEmail
+        },
+        to: [
+          {
+            email
+          }
+        ],
         subject: "KrispySkin Password Reset",
-        html: `
-          <div style="font-family:Arial,sans-serif">
+        htmlContent: `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
             <h2>KrispySkin Password Reset</h2>
 
             <p>Your password reset code is:</p>
 
-            <h1 style="letter-spacing:8px">
+            <h1 style="letter-spacing:8px;font-size:32px">
               ${code}
             </h1>
 
@@ -74,17 +82,20 @@ async function sendResetEmail(email, code) {
               you can safely ignore this email.
             </p>
           </div>
-        `
+        `,
+        textContent:
+          `Your KrispySkin password reset code is: ${code}. ` +
+          `This code expires in 10 minutes. ` +
+          `If you did not request a password reset, you can safely ignore this email.`
       })
     }
   );
 
   if (!response.ok) {
-    const errorText =
-      await response.text();
+    const errorText = await response.text();
 
     console.error(
-      "Resend error:",
+      "Brevo error:",
       errorText
     );
 
@@ -643,4 +654,4 @@ export async function POST(request) {
       { status: 500 }
     );
   }
-          }
+}
