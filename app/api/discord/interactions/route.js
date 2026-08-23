@@ -1,42 +1,26 @@
-import { NextResponse } from "next/server";
 import crypto from "crypto";
-import clientPromise from "../../../../lib/mongodb";
-
-export const runtime = "nodejs";
+import { NextResponse } from "next/server";
 
 const DISCORD_PUBLIC_KEY =
   process.env.DISCORD_PUBLIC_KEY;
 
-const DISCORD_BOT_TOKEN =
-  process.env.DISCORD_BOT_TOKEN;
-
-const DISCORD_API =
-  "https://discord.com/api/v10";
-
-// --------------------------------------------------
-// VERIFY DISCORD SIGNATURE
-// --------------------------------------------------
-
 function verifyDiscordRequest(
-  rawBody,
+  body,
   signature,
   timestamp
 ) {
-  if (!DISCORD_PUBLIC_KEY) {
-    throw new Error(
-      "DISCORD_PUBLIC_KEY is not configured."
-    );
-  }
-
-  if (!signature || !timestamp) {
+  if (
+    !DISCORD_PUBLIC_KEY ||
+    !signature ||
+    !timestamp
+  ) {
     return false;
   }
 
   try {
-    const publicKey =
+    const message =
       Buffer.from(
-        DISCORD_PUBLIC_KEY,
-        "hex"
+        timestamp + body
       );
 
     const signatureBuffer =
@@ -45,19 +29,33 @@ function verifyDiscordRequest(
         "hex"
       );
 
-    const message =
+    const publicKeyBuffer =
       Buffer.from(
-        timestamp + rawBody
+        DISCORD_PUBLIC_KEY,
+        "hex"
       );
+
+    // Ed25519 public key in SPKI DER format.
+    const spkiPrefix =
+      Buffer.from(
+        "302a300506032b6570032100",
+        "hex"
+      );
+
+    const publicKey =
+      crypto.createPublicKey({
+        key: Buffer.concat([
+          spkiPrefix,
+          publicKeyBuffer
+        ]),
+        format: "der",
+        type: "spki"
+      });
 
     return crypto.verify(
       null,
       message,
-      {
-        key: publicKey,
-        format: "der",
-        type: "spki"
-      },
+      publicKey,
       signatureBuffer
     );
   } catch (error) {
@@ -70,446 +68,22 @@ function verifyDiscordRequest(
   }
 }
 
-// --------------------------------------------------
-// DISCORD API REQUEST
-// --------------------------------------------------
-
-async function discordRequest(
-  endpoint,
-  options = {}
+function discordResponse(
+  data,
+  status = 200
 ) {
-  if (!DISCORD_BOT_TOKEN) {
-    throw new Error(
-      "DISCORD_BOT_TOKEN is not configured."
-    );
-  }
-
-  const response =
-    await fetch(
-      `${DISCORD_API}${endpoint}`,
-      {
-        ...options,
-
-        headers: {
-          Authorization:
-            `Bot ${DISCORD_BOT_TOKEN}`,
-
-          "Content-Type":
-            "application/json",
-
-          ...(options.headers || {})
-        }
-      }
-    );
-
-  if (!response.ok) {
-    const text =
-      await response.text();
-
-    throw new Error(
-      `Discord API ${response.status}: ${text}`
-    );
-  }
-
-  if (
-    response.status === 204
-  ) {
-    return null;
-  }
-
-  return response.json();
-}
-
-// --------------------------------------------------
-// EDIT ORIGINAL DISCORD MESSAGE
-// --------------------------------------------------
-
-async function updateDiscordMessage(
-  interaction,
-  status
-) {
-  if (
-    !interaction.channel_id ||
-    !interaction.message?.id
-  ) {
-    return;
-  }
-
-  const channelId =
-    interaction.channel_id;
-
-  const messageId =
-    interaction.message.id;
-
-  const statusText = {
-    dismissed:
-      "Report dismissed",
-
-    hidden:
-      "Post hidden",
-
-    deleted:
-      "Post deleted"
-  }[status] || status;
-
-  const oldEmbeds =
-    interaction.message.embeds ||
-    [];
-
-  const newEmbeds =
-    oldEmbeds.map(
-      (embed) => ({
-        ...embed,
-
-        footer: {
-          text:
-            `KrispySkin Moderation • ${statusText}`
-        }
-      })
-    );
-
-  await discordRequest(
-    `/channels/${channelId}/messages/${messageId}`,
+  return NextResponse.json(
+    data,
     {
-      method: "PATCH",
-
-      body:
-        JSON.stringify({
-          embeds:
-            newEmbeds,
-
-          components: []
-        })
+      status
     }
   );
 }
 
-// --------------------------------------------------
-// SEND FOLLOW-UP RESPONSE
-// --------------------------------------------------
-
-async function sendFollowUp(
-  interaction,
-  content
-) {
-  if (
-    !interaction.application_id ||
-    !interaction.token
-  ) {
-    return;
-  }
-
-  const response =
-    await fetch(
-      `${DISCORD_API}/webhooks/${interaction.application_id}/${interaction.token}`,
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json"
-        },
-
-        body:
-          JSON.stringify({
-            content,
-            flags: 64
-          })
-      }
-    );
-
-  if (!response.ok) {
-    const text =
-      await response.text();
-
-    console.error(
-      "Discord follow-up failed:",
-      text
-    );
-  }
-}
-
-// --------------------------------------------------
-// GET REPORT
-// --------------------------------------------------
-
-async function getReport(
-  db,
-  reportId
-) {
-  return db
-    .collection("reports")
-    .findOne({
-      id:
-        reportId
-    });
-}
-
-// --------------------------------------------------
-// UPDATE REPORT STATUS
-// --------------------------------------------------
-
-async function setReportStatus(
-  db,
-  reportId,
-  status,
-  moderator
-) {
-  await db
-    .collection("reports")
-    .updateOne(
-      {
-        id:
-          reportId
-      },
-
-      {
-        $set: {
-          status,
-
-          moderatedBy:
-            moderator,
-
-          moderatedAt:
-            new Date(),
-
-          updatedAt:
-            new Date()
-        }
-      }
-    );
-}
-
-// --------------------------------------------------
-// HIDE POST
-// --------------------------------------------------
-
-async function hidePost(
-  db,
-  postId
-) {
-  if (!postId) {
-    return;
-  }
-
-  await db
-    .collection("posts")
-    .updateOne(
-      {
-        id:
-          postId
-      },
-
-      {
-        $set: {
-          hidden:
-            true,
-
-          hiddenAt:
-            new Date(),
-
-          updatedAt:
-            new Date()
-        }
-      }
-    );
-}
-
-// --------------------------------------------------
-// DELETE POST
-// --------------------------------------------------
-
-async function deletePost(
-  db,
-  postId
-) {
-  if (!postId) {
-    return;
-  }
-
-  await db
-    .collection("posts")
-    .deleteOne({
-      id:
-        postId
-    });
-}
-
-// --------------------------------------------------
-// PROCESS MODERATION
-// --------------------------------------------------
-
-async function processModeration(
-  interaction,
-  action,
-  reportId
-) {
+export async function POST(request) {
   try {
-    const client =
-      await clientPromise;
-
-    const db =
-      client.db(
-        "krispyskin"
-      );
-
-    const report =
-      await getReport(
-        db,
-        reportId
-      );
-
-    if (!report) {
-      await sendFollowUp(
-        interaction,
-        "Report not found."
-      );
-
-      return;
-    }
-
-    // ----------------------------------------------
-    // MODERATOR NAME
-    // ----------------------------------------------
-
-    const moderator =
-      interaction.member
-        ?.user?.username ||
-
-      interaction.user
-        ?.username ||
-
-      "Discord Admin";
-
-    // ----------------------------------------------
-    // DISMISS
-    // ----------------------------------------------
-
-    if (
-      action ===
-      "dismiss"
-    ) {
-      await setReportStatus(
-        db,
-        reportId,
-        "dismissed",
-        moderator
-      );
-
-      await updateDiscordMessage(
-        interaction,
-        "dismissed"
-      );
-
-      await sendFollowUp(
-        interaction,
-        "Report dismissed."
-      );
-
-      return;
-    }
-
-    // ----------------------------------------------
-    // HIDE
-    // ----------------------------------------------
-
-    if (
-      action ===
-      "hide"
-    ) {
-      await hidePost(
-        db,
-        report.postId
-      );
-
-      await setReportStatus(
-        db,
-        reportId,
-        "hidden",
-        moderator
-      );
-
-      await updateDiscordMessage(
-        interaction,
-        "hidden"
-      );
-
-      await sendFollowUp(
-        interaction,
-        "Post hidden and report marked as hidden."
-      );
-
-      return;
-    }
-
-    // ----------------------------------------------
-    // DELETE
-    // ----------------------------------------------
-
-    if (
-      action ===
-      "delete"
-    ) {
-      await deletePost(
-        db,
-        report.postId
-      );
-
-      await setReportStatus(
-        db,
-        reportId,
-        "deleted",
-        moderator
-      );
-
-      await updateDiscordMessage(
-        interaction,
-        "deleted"
-      );
-
-      await sendFollowUp(
-        interaction,
-        "Post deleted and report marked as deleted."
-      );
-
-      return;
-    }
-
-    await sendFollowUp(
-      interaction,
-      "Unknown moderation action."
-    );
-  } catch (error) {
-    console.error(
-      "Moderation processing error:",
-      error
-    );
-
-    await sendFollowUp(
-      interaction,
-      "Moderation action failed. Check the Vercel logs."
-    );
-  }
-}
-
-// --------------------------------------------------
-// POST
-// --------------------------------------------------
-
-export async function POST(
-  request
-) {
-  try {
-    // ----------------------------------------------
-    // READ RAW BODY
-    // ----------------------------------------------
-
-    const rawBody =
+    const body =
       await request.text();
-
-    // ----------------------------------------------
-    // VERIFY SIGNATURE
-    // ----------------------------------------------
 
     const signature =
       request.headers.get(
@@ -523,211 +97,312 @@ export async function POST(
 
     const valid =
       verifyDiscordRequest(
-        rawBody,
+        body,
         signature,
         timestamp
       );
 
     if (!valid) {
+      console.error(
+        "Invalid Discord request signature."
+      );
+
       return new NextResponse(
-        "Invalid request signature.",
+        "Invalid request signature",
         {
           status: 401
         }
       );
     }
 
-    // ----------------------------------------------
-    // PARSE BODY
-    // ----------------------------------------------
+    const interaction =
+      JSON.parse(body);
 
-    let interaction;
+    // --------------------------------------------------
+    // DISCORD ENDPOINT VERIFICATION
+    // --------------------------------------------------
 
-    try {
-      interaction =
-        JSON.parse(
-          rawBody
-        );
-    } catch {
-      return new NextResponse(
-        "Invalid JSON.",
-        {
-          status: 400
-        }
-      );
-    }
-
-    // ----------------------------------------------
-    // DISCORD PING
-    // ----------------------------------------------
-
+    // Discord sends type 1 when checking
+    // whether this endpoint is valid.
     if (
-      interaction.type ===
-      1
+      interaction.type === 1
     ) {
-      return NextResponse.json({
+      return discordResponse({
         type: 1
       });
     }
 
-    // ----------------------------------------------
-    // ONLY BUTTON INTERACTIONS
-    // ----------------------------------------------
+    // --------------------------------------------------
+    // BUTTON INTERACTION
+    // --------------------------------------------------
 
     if (
-      interaction.type !==
-      3
+      interaction.type === 3
     ) {
-      return NextResponse.json({
-        type: 4,
+      const customId =
+        interaction.data?.custom_id;
 
-        data: {
-          content:
-            "Unsupported interaction.",
+      const member =
+        interaction.member;
 
-          flags: 64
+      const username =
+        member?.user?.username ||
+        "Unknown";
+
+      console.log(
+        "Discord moderation interaction:",
+        {
+          customId,
+          username
         }
-      });
-    }
+      );
 
-    // ----------------------------------------------
-    // GET CUSTOM ID
-    // ----------------------------------------------
+      // ------------------------------------------------
+      // DISMISS
+      // ------------------------------------------------
 
-    const customId =
-      interaction.data
-        ?.custom_id;
+      if (
+        customId ===
+        "report_dismiss"
+      ) {
+        return discordResponse({
+          type: 4,
+          data: {
+            content:
+              "Report dismissed.",
+            flags: 64
+          }
+        });
+      }
 
-    if (!customId) {
-      return NextResponse.json({
-        type: 4,
+      // ------------------------------------------------
+      // HIDE POST
+      // ------------------------------------------------
 
-        data: {
-          content:
-            "Invalid moderation action.",
+      if (
+        customId.startsWith(
+          "report_hide:"
+        )
+      ) {
+        const postId =
+          customId.substring(
+            "report_hide:".length
+          );
 
-          flags: 64
+        if (!postId) {
+          return discordResponse({
+            type: 4,
+            data: {
+              content:
+                "Missing post ID.",
+              flags: 64
+            }
+          });
         }
-      });
-    }
 
-    // ----------------------------------------------
-    // EXPECTED:
-    //
-    // report:dismiss:REPORT_ID
-    // report:hide:REPORT_ID
-    // report:delete:REPORT_ID
-    // ----------------------------------------------
+        try {
+          const response =
+            await fetch(
+              `${process.env.NEXT_PUBLIC_APP_URL || "https://krispy-skin.vercel.app"}/api/moderation/hide`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                  "x-discord-moderation":
+                    process.env.DISCORD_MODERATION_SECRET ||
+                    ""
+                },
+                body:
+                  JSON.stringify({
+                    postId,
+                    moderator:
+                      username
+                  })
+              }
+            );
 
-    const parts =
-      customId.split(":");
+          const result =
+            await response
+              .json()
+              .catch(
+                () => ({})
+              );
 
-    if (
-      parts.length !==
-        3 ||
-      parts[0] !==
-        "report"
-    ) {
-      return NextResponse.json({
-        type: 4,
+          if (!response.ok) {
+            console.error(
+              "Hide post failed:",
+              result
+            );
 
-        data: {
-          content:
-            "Invalid report action.",
+            return discordResponse({
+              type: 4,
+              data: {
+                content:
+                  "Failed to hide the post.",
+                flags: 64
+              }
+            });
+          }
 
-          flags: 64
+          return discordResponse({
+            type: 4,
+            data: {
+              content:
+                `Post \`${postId}\` has been hidden by ${username}.`,
+              flags: 64
+            }
+          });
+        } catch (error) {
+          console.error(
+            "Hide post error:",
+            error
+          );
+
+          return discordResponse({
+            type: 4,
+            data: {
+              content:
+                "An error occurred while hiding the post.",
+              flags: 64
+            }
+          });
         }
-      });
-    }
+      }
 
-    const action =
-      parts[1];
+      // ------------------------------------------------
+      // DELETE POST
+      // ------------------------------------------------
 
-    const reportId =
-      parts[2];
+      if (
+        customId.startsWith(
+          "report_delete:"
+        )
+      ) {
+        const postId =
+          customId.substring(
+            "report_delete:".length
+          );
 
-    // ----------------------------------------------
-    // VALID ACTION
-    // ----------------------------------------------
+        if (!postId) {
+          return discordResponse({
+            type: 4,
+            data: {
+              content:
+                "Missing post ID.",
+              flags: 64
+            }
+          });
+        }
 
-    if (
-      ![
-        "dismiss",
-        "hide",
-        "delete"
-      ].includes(
-        action
-      )
-    ) {
-      return NextResponse.json({
+        try {
+          const response =
+            await fetch(
+              `${process.env.NEXT_PUBLIC_APP_URL || "https://krispy-skin.vercel.app"}/api/moderation/delete`,
+              {
+                method: "DELETE",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                  "x-discord-moderation":
+                    process.env.DISCORD_MODERATION_SECRET ||
+                    ""
+                },
+                body:
+                  JSON.stringify({
+                    postId,
+                    moderator:
+                      username
+                  })
+              }
+            );
+
+          const result =
+            await response
+              .json()
+              .catch(
+                () => ({})
+              );
+
+          if (!response.ok) {
+            console.error(
+              "Delete post failed:",
+              result
+            );
+
+            return discordResponse({
+              type: 4,
+              data: {
+                content:
+                  "Failed to delete the post.",
+                flags: 64
+              }
+            });
+          }
+
+          return discordResponse({
+            type: 4,
+            data: {
+              content:
+                `Post \`${postId}\` has been deleted by ${username}.`,
+              flags: 64
+            }
+          });
+        } catch (error) {
+          console.error(
+            "Delete post error:",
+            error
+          );
+
+          return discordResponse({
+            type: 4,
+            data: {
+              content:
+                "An error occurred while deleting the post.",
+              flags: 64
+            }
+          });
+        }
+      }
+
+      // ------------------------------------------------
+      // UNKNOWN BUTTON
+      // ------------------------------------------------
+
+      return discordResponse({
         type: 4,
-
         data: {
           content:
             "Unknown moderation action.",
-
           flags: 64
         }
       });
     }
 
-    // ----------------------------------------------
-    // IMPORTANT:
-    //
-    // ACK DISCORD IMMEDIATELY.
-    //
-    // type: 5 = DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
-    //
-    // This prevents:
-    //
-    // "The application did not respond"
-    // ----------------------------------------------
+    // --------------------------------------------------
+    // UNKNOWN INTERACTION
+    // --------------------------------------------------
 
-    const response =
-      NextResponse.json({
-        type: 5
-      });
-
-    // ----------------------------------------------
-    // PROCESS AFTER ACK
-    //
-    // Do not await this before returning response.
-    // ----------------------------------------------
-
-    processModeration(
-      interaction,
-      action,
-      reportId
-    ).catch(
-      (error) => {
-        console.error(
-          "Background moderation error:",
-          error
-        );
+    return discordResponse({
+      type: 4,
+      data: {
+        content:
+          "Unsupported interaction.",
+        flags: 64
       }
-    );
-
-    return response;
+    });
   } catch (error) {
     console.error(
-      "Discord interaction error:",
+      "Discord interactions error:",
       error
     );
 
-    return NextResponse.json(
+    return discordResponse(
       {
-        type: 4,
-
-        data: {
-          content:
-            "Internal moderation error.",
-
-          flags: 64
-        }
+        error:
+          "Internal server error"
       },
-      {
-        status: 500
-      }
+      500
     );
   }
 }
