@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import clientPromise from "../../../lib/mongodb";
 import crypto from "crypto";
+import clientPromise from "../../../lib/mongodb";
 
 export const runtime = "nodejs";
 
@@ -17,6 +17,10 @@ const VALID_REASONS = [
 const DISCORD_WEBHOOK_URL =
   process.env.DISCORD_REPORT_WEBHOOK_URL;
 
+// --------------------------------------------------
+// SEND REPORT TO DISCORD
+// --------------------------------------------------
+
 async function sendDiscordReport({
   report,
   reporter,
@@ -28,7 +32,7 @@ async function sendDiscordReport({
       "DISCORD_REPORT_WEBHOOK_URL is not configured."
     );
 
-    return;
+    return false;
   }
 
   const reasonLabels = {
@@ -38,10 +42,12 @@ async function sendDiscordReport({
       "Predatory / Grooming-related",
     harassment:
       "Harassment Toward a Specific Person",
-    impersonation: "Impersonation",
+    impersonation:
+      "Impersonation",
     inappropriate:
-      "Other Inappropriate Content",
-    other: "Other"
+      "Inappropriate Content",
+    other:
+      "Other"
   };
 
   const reason =
@@ -53,21 +59,27 @@ async function sendDiscordReport({
     "No additional information provided.";
 
   const embed = {
-    title: "KrispySkin — New Content Report",
+    title:
+      "KrispySkin — New Content Report",
+
     description:
       "A new community report has been submitted.",
+
     color: 15158332,
+
     fields: [
       {
         name: "Report ID",
         value: `\`${report.id}\``,
         inline: false
       },
+
       {
         name: "Reason",
         value: reason,
         inline: true
       },
+
       {
         name: "Reporter",
         value:
@@ -75,6 +87,7 @@ async function sendDiscordReport({
           `ID: \`${report.reporterId}\``,
         inline: true
       },
+
       {
         name: "Post Owner",
         value:
@@ -82,17 +95,20 @@ async function sendDiscordReport({
           `ID: \`${post?.userId || "Unknown"}\``,
         inline: true
       },
+
       {
         name: "Post ID",
         value: `\`${report.postId}\``,
         inline: true
       },
+
       {
         name: "Skin ID",
         value:
           `\`${post?.skinId || "Unknown"}\``,
         inline: true
       },
+
       {
         name: "Post Title",
         value:
@@ -100,6 +116,7 @@ async function sendDiscordReport({
           "Untitled post",
         inline: false
       },
+
       {
         name: "Additional Information",
         value:
@@ -112,27 +129,35 @@ async function sendDiscordReport({
         inline: false
       }
     ],
+
     timestamp:
       new Date().toISOString(),
+
     footer: {
-      text: "KrispySkin Moderation"
+      text:
+        "KrispySkin Moderation"
     }
   };
 
-  const response = await fetch(
-    DISCORD_WEBHOOK_URL,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type":
-          "application/json"
-      },
-      body: JSON.stringify({
-        username: "KrispySkin Moderation",
-        embeds: [embed]
-      })
-    }
-  );
+  const response =
+    await fetch(
+      DISCORD_WEBHOOK_URL,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body: JSON.stringify({
+          username:
+            "KrispySkin Moderation",
+
+          embeds: [embed]
+        })
+      }
+    );
 
   if (!response.ok) {
     const errorText =
@@ -142,13 +167,19 @@ async function sendDiscordReport({
       `Discord webhook failed (${response.status}): ${errorText}`
     );
   }
+
+  return true;
 }
+
+// --------------------------------------------------
+// POST REPORT
+// --------------------------------------------------
 
 export async function POST(request) {
   try {
-    // --------------------------------------------------
-    // CHECK LOGIN SESSION
-    // --------------------------------------------------
+    // ------------------------------------------------
+    // CHECK LOGIN
+    // ------------------------------------------------
 
     const sessionToken =
       request.cookies.get(
@@ -162,19 +193,25 @@ export async function POST(request) {
           error:
             "You must be logged in to report content."
         },
-        { status: 401 }
+        {
+          status: 401
+        }
       );
     }
 
-    // --------------------------------------------------
-    // DATABASE
-    // --------------------------------------------------
+    // ------------------------------------------------
+    // MONGODB
+    // ------------------------------------------------
 
     const client =
       await clientPromise;
 
     const db =
-      client.db("krispysskin");
+      client.db("krispyskin");
+
+    // ------------------------------------------------
+    // CHECK SESSION
+    // ------------------------------------------------
 
     const session =
       await db
@@ -194,9 +231,15 @@ export async function POST(request) {
           error:
             "Your session has expired. Please login again."
         },
-        { status: 401 }
+        {
+          status: 401
+        }
       );
     }
+
+    // ------------------------------------------------
+    // GET USER
+    // ------------------------------------------------
 
     const user =
       await db
@@ -212,24 +255,28 @@ export async function POST(request) {
           error:
             "User account not found."
         },
-        { status: 401 }
+        {
+          status: 401
+        }
       );
     }
 
-    // --------------------------------------------------
+    // ------------------------------------------------
     // READ REQUEST
-    // --------------------------------------------------
+    // ------------------------------------------------
 
     const body =
       await request.json();
 
     const postId =
-      typeof body.postId === "string"
+      typeof body.postId ===
+      "string"
         ? body.postId.trim()
         : "";
 
     const reason =
-      typeof body.reason === "string"
+      typeof body.reason ===
+      "string"
         ? body.reason
             .trim()
             .toLowerCase()
@@ -241,9 +288,9 @@ export async function POST(request) {
         ? body.description.trim()
         : "";
 
-    // --------------------------------------------------
+    // ------------------------------------------------
     // VALIDATION
-    // --------------------------------------------------
+    // ------------------------------------------------
 
     if (!postId) {
       return NextResponse.json(
@@ -252,7 +299,9 @@ export async function POST(request) {
           error:
             "Post ID is required."
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
@@ -267,12 +316,15 @@ export async function POST(request) {
           error:
             "Invalid report reason."
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
     if (
-      description.length > 1000
+      description.length >
+      1000
     ) {
       return NextResponse.json(
         {
@@ -280,7 +332,9 @@ export async function POST(request) {
           error:
             "Report description is too long."
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
@@ -294,13 +348,15 @@ export async function POST(request) {
           error:
             "Please explain the reason for an Other report."
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
-    // --------------------------------------------------
+    // ------------------------------------------------
     // FIND POST
-    // --------------------------------------------------
+    // ------------------------------------------------
 
     const post =
       await db
@@ -316,13 +372,15 @@ export async function POST(request) {
           error:
             "Post not found."
         },
-        { status: 404 }
+        {
+          status: 404
+        }
       );
     }
 
-    // --------------------------------------------------
-    // PREVENT SELF-REPORTING
-    // --------------------------------------------------
+    // ------------------------------------------------
+    // PREVENT SELF REPORT
+    // ------------------------------------------------
 
     if (
       post.userId === user.id
@@ -333,13 +391,15 @@ export async function POST(request) {
           error:
             "You cannot report your own post."
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
-    // --------------------------------------------------
+    // ------------------------------------------------
     // FIND POST OWNER
-    // --------------------------------------------------
+    // ------------------------------------------------
 
     const postOwner =
       await db
@@ -348,9 +408,9 @@ export async function POST(request) {
           id: post.userId
         });
 
-    // --------------------------------------------------
-    // PREVENT DUPLICATE REPORTS
-    // --------------------------------------------------
+    // ------------------------------------------------
+    // PREVENT DUPLICATE PENDING REPORT
+    // ------------------------------------------------
 
     const existingReport =
       await db
@@ -368,13 +428,15 @@ export async function POST(request) {
           error:
             "You have already reported this post."
         },
-        { status: 409 }
+        {
+          status: 409
+        }
       );
     }
 
-    // --------------------------------------------------
+    // ------------------------------------------------
     // CREATE REPORT
-    // --------------------------------------------------
+    // ------------------------------------------------
 
     const reportId =
       `report_${crypto
@@ -383,65 +445,90 @@ export async function POST(request) {
 
     const report = {
       id: reportId,
+
       postId,
-      reporterId: user.id,
+
+      reporterId:
+        user.id,
+
       reason,
+
       description,
-      status: "pending",
-      createdAt: new Date(),
-      reviewedAt: null,
-      reviewedBy: null,
-      action: null
+
+      status:
+        "pending",
+
+      createdAt:
+        new Date(),
+
+      reviewedAt:
+        null,
+
+      reviewedBy:
+        null,
+
+      action:
+        null
     };
 
     await db
       .collection("reports")
-      .insertOne(report);
+      .insertOne(
+        report
+      );
 
-    // --------------------------------------------------
-    // SEND DISCORD NOTIFICATION
-    // --------------------------------------------------
+    // ------------------------------------------------
+    // DISCORD NOTIFICATION
+    // ------------------------------------------------
 
-    let discordSent = false;
+    let discordSent =
+      false;
 
     try {
-      await sendDiscordReport({
-        report,
-        reporter: user,
-        post,
-        postOwner
-      });
-
-      discordSent = true;
+      discordSent =
+        await sendDiscordReport({
+          report,
+          reporter: user,
+          post,
+          postOwner
+        });
     } catch (discordError) {
-      // Do NOT fail the report itself if
-      // Discord is temporarily unavailable.
       console.error(
         "Discord report notification error:",
         discordError
       );
     }
 
-    // --------------------------------------------------
+    // ------------------------------------------------
     // RESPONSE
-    // --------------------------------------------------
+    // ------------------------------------------------
 
     return NextResponse.json(
       {
         success: true,
+
         report: {
-          id: reportId,
+          id:
+            reportId,
+
           postId,
+
           reason,
-          status: "pending"
+
+          status:
+            "pending"
         },
+
         notification: {
           discordSent
         },
+
         message:
           "Report submitted successfully."
       },
-      { status: 201 }
+      {
+        status: 201
+      }
     );
   } catch (error) {
     console.error(
@@ -455,7 +542,9 @@ export async function POST(request) {
         error:
           "Failed to submit report."
       },
-      { status: 500 }
+      {
+        status: 500
+      }
     );
   }
 }
