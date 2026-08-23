@@ -5,13 +5,15 @@ export const runtime = "nodejs";
 
 export async function GET(request) {
   try {
-    const token = request.cookies.get("krispyskin_session")?.value;
+    const token =
+      request.cookies.get("krispyskin_session")?.value;
 
     if (!token) {
       return NextResponse.json(
         {
           success: false,
-          authenticated: false
+          authenticated: false,
+          error: "You must be logged in"
         },
         { status: 401 }
       );
@@ -20,29 +22,66 @@ export async function GET(request) {
     const client = await clientPromise;
     const db = client.db("krispyskin");
 
-    const session = await db.collection("sessions").findOne({
-      token
-    });
+    const session =
+      await db.collection("sessions").findOne({
+        token: token
+      });
 
-    if (!session || new Date(session.expiresAt) <= new Date()) {
+    if (!session) {
       return NextResponse.json(
         {
           success: false,
-          authenticated: false
+          authenticated: false,
+          error: "Session not found"
         },
         { status: 401 }
       );
     }
 
-    const user = await db.collection("users").findOne({
-      id: session.userId
-    });
+    if (
+      !session.expiresAt ||
+      new Date(session.expiresAt) <= new Date()
+    ) {
+      await db.collection("sessions").deleteOne({
+        token: token
+      });
 
-    if (!user) {
       return NextResponse.json(
         {
           success: false,
-          authenticated: false
+          authenticated: false,
+          error: "Session expired"
+        },
+        { status: 401 }
+      );
+    }
+
+    if (!session.userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          authenticated: false,
+          error: "Invalid session"
+        },
+        { status: 401 }
+      );
+    }
+
+    const user =
+      await db.collection("users").findOne({
+        id: session.userId
+      });
+
+    if (!user) {
+      await db.collection("sessions").deleteOne({
+        token: token
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          authenticated: false,
+          error: "User not found"
         },
         { status: 401 }
       );
@@ -53,16 +92,22 @@ export async function GET(request) {
       authenticated: true,
       user: {
         id: user.id,
-        username: user.username,
-        skinId: user.skinId || null
+        username: user.username || "",
+        email: user.email || "",
+        skinId: user.skinId || null,
+        banned: user.banned === true
       }
     });
   } catch (error) {
-    console.error("KrispySkin session error:", error);
+    console.error(
+      "KrispySkin session error:",
+      error
+    );
 
     return NextResponse.json(
       {
         success: false,
+        authenticated: false,
         error: "Failed to check session"
       },
       { status: 500 }
