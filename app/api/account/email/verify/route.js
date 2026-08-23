@@ -14,7 +14,7 @@ function hashCode(code) {
 export async function POST(request) {
   try {
     const sessionToken =
-      request.cookies.get("krispy_skin")?.value;
+      request.cookies.get("krispy_skin_session")?.value;
 
     if (!sessionToken) {
       return NextResponse.json(
