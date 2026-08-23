@@ -34,8 +34,8 @@ function safeEqual(a, b) {
 }
 
 async function sendResetEmail(email, code) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
+  const apiKey = process.env.BREVO_API_KEY;
+  const fromEmail = process.env.EMAIL_FROM;
 
   if (!apiKey || !fromEmail) {
     throw new Error(
