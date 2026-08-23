@@ -1,222 +1,189 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
-export default function AccountSettings() {
-  const router = useRouter();
+const DEFAULT_AVATAR =
+  "https://i.postimg.cc/JhwdnS9p/651c6da502353948bdc929f02da2b8e0.jpg";
 
+export default function AccountSettingsPage() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [section, setSection] = useState("profile");
+
+  const [theme, setTheme] = useState("system");
 
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [emailCode, setEmailCode] = useState("");
-  const [emailStep, setEmailStep] = useState("email");
+  const [newUsername, setNewUsername] = useState("");
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [theme, setTheme] = useState("system");
-  const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+
+  const [profilePicture, setProfilePicture] =
+    useState("");
+
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const response = await fetch("/api/auth/me", {
-          credentials: "include",
-          cache: "no-store"
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.authenticated) {
-          router.replace("/login");
-          return;
-        }
-
-        setUser(data.user);
-        setUsername(data.user?.username || "");
-        setEmail(data.user?.email || "");
-      } catch (err) {
-        console.error(err);
-        setError("Failed to load account.");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    load();
-  }, [router]);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [changingUsername, setChangingUsername] =
+    useState(false);
+  const [changingPassword, setChangingPassword] =
+    useState(false);
+  const [savingProfile, setSavingProfile] =
+    useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("krispyskin_theme");
-
-    if (
-      saved === "light" ||
-      saved === "dark" ||
-      saved === "system"
-    ) {
-      setTheme(saved);
-      applyTheme(saved);
-    }
+    loadAccount();
   }, []);
+
+  useEffect(() => {
+    const savedTheme =
+      localStorage.getItem("krispy_theme") ||
+      "system";
+
+    setTheme(savedTheme);
+    applyTheme(savedTheme);
+  }, []);
+
+  async function loadAccount() {
+    try {
+      const response = await fetch(
+        "/api/account/profile",
+        {
+          credentials: "include"
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "Failed to load account"
+        );
+      }
+
+      setUser(data.user);
+      setUsername(data.user.username || "");
+      setEmail(data.user.email || "");
+      setProfilePicture(
+        data.user.profilePicture || ""
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function applyTheme(value) {
     if (value === "system") {
-      document.documentElement.removeAttribute("data-theme");
-    } else {
-      document.documentElement.setAttribute(
-        "data-theme",
-        value
+      document.documentElement.removeAttribute(
+        "data-theme"
       );
+      return;
     }
+
+    document.documentElement.setAttribute(
+      "data-theme",
+      value
+    );
   }
 
   function changeTheme(value) {
     setTheme(value);
-    localStorage.setItem("krispyskin_theme", value);
+
+    localStorage.setItem(
+      "krispy_theme",
+      value
+    );
+
     applyTheme(value);
   }
 
-  function clearStatus() {
-    setMessage("");
-    setError("");
-  }
-
-  async function api(path, body) {
-    const response = await fetch(path, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data.error || "Request failed."
-      );
-    }
-
-    return data;
-  }
-
-  async function saveUsername(event) {
+  async function handleUsernameChange(event) {
     event.preventDefault();
-    clearStatus();
-    setBusy(true);
+
+    setError("");
+    setMessage("");
+    setChangingUsername(true);
 
     try {
-      const data = await api(
+      const response = await fetch(
         "/api/account/username",
         {
-          username: username.trim()
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            username: newUsername
+          })
         }
       );
 
-      setUsername(data.username);
+      const data = await response.json();
 
-      setUser((old) => ({
-        ...old,
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            "Failed to change username"
+        );
+      }
+
+      setUsername(data.username);
+      setNewUsername("");
+
+      setUser((current) => ({
+        ...current,
         username: data.username
       }));
 
-      setMessage("Username updated successfully.");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function sendEmail(event) {
-    event.preventDefault();
-    clearStatus();
-    setBusy(true);
-
-    try {
-      await api(
-        "/api/account/email/send",
-        {
-          email: email.trim()
-        }
-      );
-
-      setEmailStep("code");
       setMessage(
-        "Verification code sent to your email."
+        "Username changed successfully."
       );
     } catch (err) {
       setError(err.message);
     } finally {
-      setBusy(false);
+      setChangingUsername(false);
     }
   }
 
-  async function verifyEmail(event) {
+  async function handlePasswordChange(event) {
     event.preventDefault();
-    clearStatus();
-    setBusy(true);
+
+    setError("");
+    setMessage("");
+    setChangingPassword(true);
 
     try {
-      const data = await api(
-        "/api/account/email/verify",
+      const response = await fetch(
+        "/api/account/password",
         {
-          email: email.trim(),
-          code: emailCode.trim()
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            currentPassword,
+            newPassword,
+            confirmPassword
+          })
         }
       );
 
-      const verifiedEmail =
-        data.email || email.trim();
+      const data = await response.json();
 
-      setEmail(verifiedEmail);
-
-      setUser((old) => ({
-        ...old,
-        email: verifiedEmail
-      }));
-
-      setEmailCode("");
-      setEmailStep("email");
-      setMessage("Email updated successfully.");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-    async function changePassword(event) {
-    event.preventDefault();
-    clearStatus();
-
-    if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("New passwords do not match.");
-      return;
-    }
-
-    setBusy(true);
-
-    try {
-      await api("/api/account/password", {
-        currentPassword,
-        newPassword,
-        confirmPassword
-      });
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            "Failed to change password"
+        );
+      }
 
       setCurrentPassword("");
       setNewPassword("");
@@ -225,318 +192,602 @@ export default function AccountSettings() {
       setMessage(
         "Password changed successfully. Please log in again."
       );
-
-      setTimeout(() => {
-        router.replace("/login");
-      }, 1500);
     } catch (err) {
       setError(err.message);
     } finally {
-      setBusy(false);
+      setChangingPassword(false);
+    }
+  }
+
+  async function sendVerificationCode() {
+    if (!email) {
+      setError(
+        "Please enter your email address first."
+      );
+      return;
+    }
+
+    setError("");
+    setMessage("");
+    setSendingCode(true);
+
+    try {
+      const response = await fetch(
+        "/api/account/email/send",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            email
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            "Failed to send verification code"
+        );
+      }
+
+      setMessage(
+        "A verification code has been sent to your email."
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSendingCode(false);
+    }
+  }
+
+  async function verifyEmail() {
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        "/api/account/email/verify",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            code: verificationCode
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            "Failed to verify email"
+        );
+      }
+
+      setVerificationCode("");
+
+      setUser((current) => ({
+        ...current,
+        email,
+        emailVerified: true
+      }));
+
+      setMessage(
+        "Email verified successfully."
+      );
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function saveProfile() {
+    setError("");
+    setMessage("");
+    setSavingProfile(true);
+
+    try {
+      const response = await fetch(
+        "/api/account/profile",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            profilePicture
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error ||
+            "Failed to save profile"
+        );
+      }
+
+      setUser((current) => ({
+        ...current,
+        profilePicture:
+          data.user.profilePicture
+      }));
+
+      setMessage(
+        "Profile picture saved successfully."
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingProfile(false);
     }
   }
 
   if (loading) {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          fontFamily: "Arial, sans-serif"
-        }}
-      >
-        <h1>Loading...</h1>
+      <main className="account-settings">
+        <div className="settings-card">
+          Loading account settings...
+        </div>
       </main>
     );
   }
 
+  const avatar =
+    profilePicture || DEFAULT_AVATAR;
+
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        padding: "30px",
-        fontFamily: "Arial, sans-serif"
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "800px",
-          margin: "0 auto"
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => router.push("/dashboard")}
-        >
-          ← Dashboard
-        </button>
+    <main className="account-settings">
+      <div className="settings-container">
+        <header className="settings-header">
+          <h1>Account Settings</h1>
 
-        <h1>Account Settings</h1>
-
-        <p>
-          Signed in as{" "}
-          <strong>{user?.username}</strong>
-        </p>
+          <p>
+            Manage your KrispySkin account
+            and preferences.
+          </p>
+        </header>
 
         {message && (
-          <p style={{ color: "green" }}>
+          <div className="settings-message">
             {message}
-          </p>
+          </div>
         )}
 
         {error && (
-          <p style={{ color: "red" }}>
+          <div className="settings-error">
             {error}
-          </p>
+          </div>
         )}
 
-        <nav
-          style={{
-            display: "flex",
-            gap: "8px",
-            flexWrap: "wrap",
-            margin: "20px 0"
-          }}
-        >
-          {["profile", "security", "theme"].map(
-            (item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => {
-                  clearStatus();
-                  setSection(item);
-                }}
-              >
-                {item === "profile"
-                  ? "Profile"
-                  : item === "security"
-                  ? "Security"
-                  : "Theme"}
-              </button>
-            )
-          )}
-        </nav>
+        <section className="settings-card">
+          <h2>Profile</h2>
 
-        {section === "profile" && (
-          <section>
-            <h2>Profile</h2>
+          <div className="profile-preview">
+            <img
+              src={avatar}
+              alt="Profile"
+              className="profile-avatar"
+            />
 
-            <form onSubmit={saveUsername}>
-              <label>Username</label>
+            <div>
+              <strong>
+                {username || "User"}
+              </strong>
 
-              <br />
+              <p>
+                {user?.email ||
+                  "Email not verified"}
+              </p>
+            </div>
+          </div>
 
-              <input
-                value={username}
-                onChange={(e) =>
-                  setUsername(e.target.value)
-                }
-                maxLength={24}
-                autoComplete="username"
-              />
+          <label>
+            Profile picture URL
+          </label>
 
-              <br />
+          <input
+            type="url"
+            value={profilePicture}
+            placeholder={DEFAULT_AVATAR}
+            onChange={(event) =>
+              setProfilePicture(
+                event.target.value
+              )
+            }
+          />
 
-              <button
-                type="submit"
-                disabled={busy}
-              >
-                {busy
-                  ? "Saving..."
-                  : "Save Username"}
-              </button>
-            </form>
+          <button
+            onClick={saveProfile}
+            disabled={savingProfile}
+          >
+            {savingProfile
+              ? "Saving..."
+              : "Save Profile"}
+          </button>
+        </section>
 
-            <hr />
+        <section className="settings-card">
+          <h2>Theme</h2>
 
-            <form
-              onSubmit={
-                emailStep === "email"
-                  ? sendEmail
-                  : verifyEmail
+          <p>
+            Choose your KrispySkin
+            appearance.
+          </p>
+
+          <select
+            value={theme}
+            onChange={(event) =>
+              changeTheme(
+                event.target.value
+              )
+            }
+          >
+            <option value="system">
+              System
+            </option>
+
+            <option value="light">
+              Light
+            </option>
+
+            <option value="dark">
+              Dark
+            </option>
+          </select>
+        </section>
+
+        <section className="settings-card">
+          <h2>Change Username</h2>
+
+          <p>
+            Current username:{" "}
+            <strong>{username}</strong>
+          </p>
+
+          <form
+            onSubmit={
+              handleUsernameChange
+            }
+          >
+            <input
+              type="text"
+              value={newUsername}
+              placeholder="New username"
+              maxLength={24}
+              onChange={(event) =>
+                setNewUsername(
+                  event.target.value
+                )
+              }
+            />
+
+            <button
+              type="submit"
+              disabled={
+                changingUsername ||
+                !newUsername
               }
             >
-              <label>Email Address</label>
+              {changingUsername
+                ? "Changing..."
+                : "Change Username"}
+            </button>
+          </form>
+        </section>
 
-              <br />
+        <section className="settings-card">
+          <h2>Change Password</h2>
+
+          <p>
+            Enter your current password
+            before changing it.
+          </p>
+
+          <form
+            onSubmit={
+              handlePasswordChange
+            }
+          >
+            <input
+              type="password"
+              placeholder="Current password"
+              value={currentPassword}
+              onChange={(event) =>
+                setCurrentPassword(
+                  event.target.value
+                )
+              }
+            />
+
+            <input
+              type="password"
+              placeholder="New password"
+              value={newPassword}
+              onChange={(event) =>
+                setNewPassword(
+                  event.target.value
+                )
+              }
+            />
+
+            <input
+              type="password"
+              placeholder="Confirm new password"
+              value={confirmPassword}
+              onChange={(event) =>
+                setConfirmPassword(
+                  event.target.value
+                )
+              }
+            />
+
+            <button
+              type="submit"
+              disabled={
+                changingPassword
+              }
+            >
+              {changingPassword
+                ? "Changing..."
+                : "Change Password"}
+            </button>
+          </form>
+        </section>
+
+        <section className="settings-card">
+          <h2>Email Authorization</h2>
+
+          {user?.emailVerified ? (
+            <div className="verified">
+              Verified email:
+              <strong>
+                {user.email}
+              </strong>
+            </div>
+          ) : (
+            <>
+              <p>
+                Verify your email so your
+                account can be used for
+                password recovery.
+              </p>
 
               <input
                 type="email"
+                placeholder="your@email.com"
                 value={email}
-                disabled={emailStep === "code"}
-                onChange={(e) =>
-                  setEmail(e.target.value)
-                }
-                autoComplete="email"
-              />
-
-              {emailStep === "email" ? (
-                <button
-                  type="submit"
-                  disabled={busy}
-                >
-                  {busy
-                    ? "Sending..."
-                    : "Send Verification Code"}
-                </button>
-              ) : (
-                <>
-                  <br />
-
-                  <input
-                    value={emailCode}
-                    onChange={(e) =>
-                      setEmailCode(
-                        e.target.value
-                      )
-                    }
-                    maxLength={6}
-                    inputMode="numeric"
-                    placeholder="6-digit code"
-                    autoComplete="one-time-code"
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={busy}
-                  >
-                    {busy
-                      ? "Verifying..."
-                      : "Verify Email"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmailStep("email");
-                      setEmailCode("");
-                      clearStatus();
-                    }}
-                  >
-                    Change Email
-                  </button>
-                </>
-              )}
-            </form>
-          </section>
-        )}
-
-        {section === "security" && (
-          <section>
-            <h2>Security</h2>
-
-            <form onSubmit={changePassword}>
-              <label>Current Password</label>
-
-              <br />
-
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) =>
-                  setCurrentPassword(
-                    e.target.value
+                onChange={(event) =>
+                  setEmail(
+                    event.target.value
                   )
                 }
-                autoComplete="current-password"
               />
 
-              <br />
-
-              <label>New Password</label>
-
-              <br />
+              <button
+                onClick={
+                  sendVerificationCode
+                }
+                disabled={sendingCode}
+              >
+                {sendingCode
+                  ? "Sending..."
+                  : "Send Verification Code"}
+              </button>
 
               <input
-                type="password"
-                value={newPassword}
-                onChange={(e) =>
-                  setNewPassword(
-                    e.target.value
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="6-digit code"
+                value={verificationCode}
+                onChange={(event) =>
+                  setVerificationCode(
+                    event.target.value
                   )
                 }
-                autoComplete="new-password"
               />
 
-              <br />
-
-              <label>
-                Confirm New Password
-              </label>
-
-              <br />
-
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) =>
-                  setConfirmPassword(
-                    e.target.value
-                  )
+              <button
+                onClick={verifyEmail}
+                disabled={
+                  verificationCode.length !==
+                  6
                 }
-                autoComplete="new-password"
-              />
-
-              <br />
-
-              <button
-                type="submit"
-                disabled={busy}
               >
-                {busy
-                  ? "Changing..."
-                  : "Change Password"}
+                Verify Email
               </button>
-            </form>
-          </section>
-        )}
-
-        {section === "theme" && (
-          <section>
-            <h2>Theme</h2>
-
-            <p>
-              Choose your preferred KrispySkin theme.
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                flexWrap: "wrap"
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => changeTheme("system")}
-              >
-                System
-              </button>
-
-              <button
-                type="button"
-                onClick={() => changeTheme("light")}
-              >
-                Light
-              </button>
-
-              <button
-                type="button"
-                onClick={() => changeTheme("dark")}
-              >
-                Dark
-              </button>
-            </div>
-
-            <p>
-              Current theme:{" "}
-              <strong>{theme}</strong>
-            </p>
-          </section>
-        )}
+            </>
+          )}
+        </section>
       </div>
+
+      <style jsx>{`
+        .account-settings {
+          min-height: 100vh;
+          padding: 40px 20px;
+          background: #f5f5f5;
+          color: #171717;
+        }
+
+        .settings-container {
+          width: 100%;
+          max-width: 760px;
+          margin: 0 auto;
+        }
+
+        .settings-header {
+          margin-bottom: 25px;
+        }
+
+        .settings-header h1 {
+          margin: 0;
+          font-size: 32px;
+        }
+
+        .settings-header p {
+          color: #666;
+        }
+
+        .settings-card {
+          background: white;
+          border-radius: 16px;
+          padding: 24px;
+          margin-bottom: 18px;
+          box-shadow:
+            0 4px 20px
+            rgba(0, 0, 0, 0.06);
+        }
+
+        .settings-card h2 {
+          margin-top: 0;
+        }
+
+        .settings-card p {
+          color: #666;
+        }
+
+        .settings-card form {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        input,
+        select {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 12px 14px;
+          border: 1px solid #ddd;
+          border-radius: 10px;
+          font-size: 15px;
+          margin: 8px 0;
+          background: white;
+          color: #171717;
+        }
+
+        button {
+          border: 0;
+          border-radius: 10px;
+          padding: 12px 16px;
+          margin-top: 8px;
+          cursor: pointer;
+          font-weight: 600;
+          background: #171717;
+          color: white;
+        }
+
+        button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .profile-preview {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+
+        .profile-avatar {
+          width: 80px;
+          height: 80px;
+          border-radius: 50%;
+          object-fit: cover;
+          display: block;
+        }
+
+        .profile-preview strong {
+          font-size: 20px;
+        }
+
+        .profile-preview p {
+          margin: 4px 0 0;
+        }
+
+        .settings-message,
+        .settings-error {
+          padding: 14px;
+          border-radius: 10px;
+          margin-bottom: 16px;
+        }
+
+        .settings-message {
+          background: #e8f7ec;
+          color: #176b2c;
+        }
+
+        .settings-error {
+          background: #fdeaea;
+          color: #a32020;
+        }
+
+        .verified {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+          padding: 14px;
+          border-radius: 10px;
+          background: #e8f7ec;
+          color: #176b2c;
+        }
+
+        @media (max-width: 600px) {
+          .account-settings {
+            padding: 20px 12px;
+          }
+
+          .settings-card {
+            padding: 18px;
+          }
+
+          .settings-header h1 {
+            font-size: 26px;
+          }
+        }
+
+        :global([data-theme="dark"])
+          .account-settings {
+          background: #111;
+          color: #eee;
+        }
+
+        :global([data-theme="dark"])
+          .settings-card {
+          background: #1c1c1c;
+          color: #eee;
+        }
+
+        :global([data-theme="dark"])
+          .settings-card p {
+          color: #aaa;
+        }
+
+        :global([data-theme="dark"])
+          input,
+        :global([data-theme="dark"])
+          select {
+          background: #252525;
+          color: #eee;
+          border-color: #444;
+        }
+
+        :global([data-theme="dark"])
+          .settings-header p {
+          color: #aaa;
+        }
+      `}</style>
     </main>
   );
-}
+              }
