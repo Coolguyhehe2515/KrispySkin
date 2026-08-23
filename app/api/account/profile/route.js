@@ -8,7 +8,7 @@ const DEFAULT_PROFILE_PICTURE =
 
 async function getAuthenticatedUser(request) {
   const sessionToken =
-    request.cookies.get("krispy_session")?.value;
+    request.cookies.get("krispy_skin_session")?.value;
 
   if (!sessionToken) {
     return {
@@ -25,8 +25,9 @@ async function getAuthenticatedUser(request) {
   const client = await clientPromise;
   const db = client.db("krispyskin");
 
-  const session =
-    await db.collection("sessions").findOne({
+  const session = await db
+    .collection("sessions")
+    .findOne({
       token: sessionToken
     });
 
@@ -57,8 +58,9 @@ async function getAuthenticatedUser(request) {
     };
   }
 
-  const user =
-    await db.collection("users").findOne({
+  const user = await db
+    .collection("users")
+    .findOne({
       id: session.userId
     });
 
@@ -133,10 +135,9 @@ export async function POST(request) {
 
     const body = await request.json();
 
-    const profilePicture =
-      String(
-        body.profilePicture || ""
-      ).trim();
+    const profilePicture = String(
+      body.profilePicture || ""
+    ).trim();
 
     if (!profilePicture) {
       return NextResponse.json(
@@ -219,8 +220,7 @@ export async function POST(request) {
     return NextResponse.json(
       {
         success: false,
-        error:
-          "Failed to update profile"
+        error: "Failed to update profile"
       },
       { status: 500 }
     );
