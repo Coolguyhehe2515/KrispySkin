@@ -14,28 +14,19 @@ const DISCORD_API =
   "https://discord.com/api/v10";
 
 // --------------------------------------------------
-// DISCORD SIGNATURE VERIFICATION
+// VERIFY DISCORD SIGNATURE
 // --------------------------------------------------
 
-async function verifyDiscordRequest(
-  request,
-  rawBody
+function verifyDiscordRequest(
+  rawBody,
+  signature,
+  timestamp
 ) {
   if (!DISCORD_PUBLIC_KEY) {
     throw new Error(
       "DISCORD_PUBLIC_KEY is not configured."
     );
   }
-
-  const signature =
-    request.headers.get(
-      "x-signature-ed25519"
-    );
-
-  const timestamp =
-    request.headers.get(
-      "x-signature-timestamp"
-    );
 
   if (!signature || !timestamp) {
     return false;
@@ -80,7 +71,7 @@ async function verifyDiscordRequest(
 }
 
 // --------------------------------------------------
-// DISCORD API
+// DISCORD API REQUEST
 // --------------------------------------------------
 
 async function discordRequest(
@@ -98,11 +89,14 @@ async function discordRequest(
       `${DISCORD_API}${endpoint}`,
       {
         ...options,
+
         headers: {
           Authorization:
             `Bot ${DISCORD_BOT_TOKEN}`,
+
           "Content-Type":
             "application/json",
+
           ...(options.headers || {})
         }
       }
@@ -127,105 +121,7 @@ async function discordRequest(
 }
 
 // --------------------------------------------------
-// FIND REPORT
-// --------------------------------------------------
-
-async function findReport(
-  db,
-  reportId
-) {
-  if (!reportId) {
-    return null;
-  }
-
-  return db
-    .collection("reports")
-    .findOne({
-      id: reportId
-    });
-}
-
-// --------------------------------------------------
-// UPDATE REPORT
-// --------------------------------------------------
-
-async function updateReport(
-  db,
-  reportId,
-  status,
-  moderator
-) {
-  return db
-    .collection("reports")
-    .updateOne(
-      {
-        id: reportId
-      },
-      {
-        $set: {
-          status,
-          moderatedBy:
-            moderator || "Discord Admin",
-          moderatedAt:
-            new Date(),
-          updatedAt:
-            new Date()
-        }
-      }
-    );
-}
-
-// --------------------------------------------------
-// HIDE POST
-// --------------------------------------------------
-
-async function hidePost(
-  db,
-  report
-) {
-  if (!report.postId) {
-    return;
-  }
-
-  await db
-    .collection("posts")
-    .updateOne(
-      {
-        id: report.postId
-      },
-      {
-        $set: {
-          hidden: true,
-          hiddenAt:
-            new Date(),
-          updatedAt:
-            new Date()
-        }
-      }
-    );
-}
-
-// --------------------------------------------------
-// DELETE POST
-// --------------------------------------------------
-
-async function deletePost(
-  db,
-  report
-) {
-  if (!report.postId) {
-    return;
-  }
-
-  await db
-    .collection("posts")
-    .deleteOne({
-      id: report.postId
-    });
-}
-
-// --------------------------------------------------
-// UPDATE DISCORD REPORT MESSAGE
+// EDIT ORIGINAL DISCORD MESSAGE
 // --------------------------------------------------
 
 async function updateDiscordMessage(
@@ -248,32 +144,352 @@ async function updateDiscordMessage(
   const statusText = {
     dismissed:
       "Report dismissed",
+
     hidden:
       "Post hidden",
+
     deleted:
       "Post deleted"
   }[status] || status;
+
+  const oldEmbeds =
+    interaction.message.embeds ||
+    [];
+
+  const newEmbeds =
+    oldEmbeds.map(
+      (embed) => ({
+        ...embed,
+
+        footer: {
+          text:
+            `KrispySkin Moderation • ${statusText}`
+        }
+      })
+    );
 
   await discordRequest(
     `/channels/${channelId}/messages/${messageId}`,
     {
       method: "PATCH",
-      body: JSON.stringify({
-        embeds:
-          interaction.message
-            .embeds?.map(
-              (embed) => ({
-                ...embed,
-                footer: {
-                  text:
-                    `Moderation: ${statusText}`
-                }
-              })
-            ) || [],
-        components: []
-      })
+
+      body:
+        JSON.stringify({
+          embeds:
+            newEmbeds,
+
+          components: []
+        })
     }
   );
+}
+
+// --------------------------------------------------
+// SEND FOLLOW-UP RESPONSE
+// --------------------------------------------------
+
+async function sendFollowUp(
+  interaction,
+  content
+) {
+  if (
+    !interaction.application_id ||
+    !interaction.token
+  ) {
+    return;
+  }
+
+  const response =
+    await fetch(
+      `${DISCORD_API}/webhooks/${interaction.application_id}/${interaction.token}`,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body:
+          JSON.stringify({
+            content,
+            flags: 64
+          })
+      }
+    );
+
+  if (!response.ok) {
+    const text =
+      await response.text();
+
+    console.error(
+      "Discord follow-up failed:",
+      text
+    );
+  }
+}
+
+// --------------------------------------------------
+// GET REPORT
+// --------------------------------------------------
+
+async function getReport(
+  db,
+  reportId
+) {
+  return db
+    .collection("reports")
+    .findOne({
+      id:
+        reportId
+    });
+}
+
+// --------------------------------------------------
+// UPDATE REPORT STATUS
+// --------------------------------------------------
+
+async function setReportStatus(
+  db,
+  reportId,
+  status,
+  moderator
+) {
+  await db
+    .collection("reports")
+    .updateOne(
+      {
+        id:
+          reportId
+      },
+
+      {
+        $set: {
+          status,
+
+          moderatedBy:
+            moderator,
+
+          moderatedAt:
+            new Date(),
+
+          updatedAt:
+            new Date()
+        }
+      }
+    );
+}
+
+// --------------------------------------------------
+// HIDE POST
+// --------------------------------------------------
+
+async function hidePost(
+  db,
+  postId
+) {
+  if (!postId) {
+    return;
+  }
+
+  await db
+    .collection("posts")
+    .updateOne(
+      {
+        id:
+          postId
+      },
+
+      {
+        $set: {
+          hidden:
+            true,
+
+          hiddenAt:
+            new Date(),
+
+          updatedAt:
+            new Date()
+        }
+      }
+    );
+}
+
+// --------------------------------------------------
+// DELETE POST
+// --------------------------------------------------
+
+async function deletePost(
+  db,
+  postId
+) {
+  if (!postId) {
+    return;
+  }
+
+  await db
+    .collection("posts")
+    .deleteOne({
+      id:
+        postId
+    });
+}
+
+// --------------------------------------------------
+// PROCESS MODERATION
+// --------------------------------------------------
+
+async function processModeration(
+  interaction,
+  action,
+  reportId
+) {
+  try {
+    const client =
+      await clientPromise;
+
+    const db =
+      client.db(
+        "krispyskin"
+      );
+
+    const report =
+      await getReport(
+        db,
+        reportId
+      );
+
+    if (!report) {
+      await sendFollowUp(
+        interaction,
+        "Report not found."
+      );
+
+      return;
+    }
+
+    // ----------------------------------------------
+    // MODERATOR NAME
+    // ----------------------------------------------
+
+    const moderator =
+      interaction.member
+        ?.user?.username ||
+
+      interaction.user
+        ?.username ||
+
+      "Discord Admin";
+
+    // ----------------------------------------------
+    // DISMISS
+    // ----------------------------------------------
+
+    if (
+      action ===
+      "dismiss"
+    ) {
+      await setReportStatus(
+        db,
+        reportId,
+        "dismissed",
+        moderator
+      );
+
+      await updateDiscordMessage(
+        interaction,
+        "dismissed"
+      );
+
+      await sendFollowUp(
+        interaction,
+        "Report dismissed."
+      );
+
+      return;
+    }
+
+    // ----------------------------------------------
+    // HIDE
+    // ----------------------------------------------
+
+    if (
+      action ===
+      "hide"
+    ) {
+      await hidePost(
+        db,
+        report.postId
+      );
+
+      await setReportStatus(
+        db,
+        reportId,
+        "hidden",
+        moderator
+      );
+
+      await updateDiscordMessage(
+        interaction,
+        "hidden"
+      );
+
+      await sendFollowUp(
+        interaction,
+        "Post hidden and report marked as hidden."
+      );
+
+      return;
+    }
+
+    // ----------------------------------------------
+    // DELETE
+    // ----------------------------------------------
+
+    if (
+      action ===
+      "delete"
+    ) {
+      await deletePost(
+        db,
+        report.postId
+      );
+
+      await setReportStatus(
+        db,
+        reportId,
+        "deleted",
+        moderator
+      );
+
+      await updateDiscordMessage(
+        interaction,
+        "deleted"
+      );
+
+      await sendFollowUp(
+        interaction,
+        "Post deleted and report marked as deleted."
+      );
+
+      return;
+    }
+
+    await sendFollowUp(
+      interaction,
+      "Unknown moderation action."
+    );
+  } catch (error) {
+    console.error(
+      "Moderation processing error:",
+      error
+    );
+
+    await sendFollowUp(
+      interaction,
+      "Moderation action failed. Check the Vercel logs."
+    );
+  }
 }
 
 // --------------------------------------------------
@@ -284,13 +500,32 @@ export async function POST(
   request
 ) {
   try {
+    // ----------------------------------------------
+    // READ RAW BODY
+    // ----------------------------------------------
+
     const rawBody =
       await request.text();
 
+    // ----------------------------------------------
+    // VERIFY SIGNATURE
+    // ----------------------------------------------
+
+    const signature =
+      request.headers.get(
+        "x-signature-ed25519"
+      );
+
+    const timestamp =
+      request.headers.get(
+        "x-signature-timestamp"
+      );
+
     const valid =
-      await verifyDiscordRequest(
-        request,
-        rawBody
+      verifyDiscordRequest(
+        rawBody,
+        signature,
+        timestamp
       );
 
     if (!valid) {
@@ -301,6 +536,10 @@ export async function POST(
         }
       );
     }
+
+    // ----------------------------------------------
+    // PARSE BODY
+    // ----------------------------------------------
 
     let interaction;
 
@@ -318,34 +557,42 @@ export async function POST(
       );
     }
 
-    // ------------------------------------------------
-    // PING
-    // ------------------------------------------------
+    // ----------------------------------------------
+    // DISCORD PING
+    // ----------------------------------------------
 
     if (
-      interaction.type === 1
+      interaction.type ===
+      1
     ) {
       return NextResponse.json({
         type: 1
       });
     }
 
-    // ------------------------------------------------
-    // BUTTON INTERACTION
-    // ------------------------------------------------
+    // ----------------------------------------------
+    // ONLY BUTTON INTERACTIONS
+    // ----------------------------------------------
 
     if (
-      interaction.type !== 3
+      interaction.type !==
+      3
     ) {
       return NextResponse.json({
         type: 4,
+
         data: {
           content:
             "Unsupported interaction.",
+
           flags: 64
         }
       });
     }
+
+    // ----------------------------------------------
+    // GET CUSTOM ID
+    // ----------------------------------------------
 
     const customId =
       interaction.data
@@ -354,36 +601,40 @@ export async function POST(
     if (!customId) {
       return NextResponse.json({
         type: 4,
+
         data: {
           content:
             "Invalid moderation action.",
+
           flags: 64
         }
       });
     }
 
-    // ------------------------------------------------
-    // PARSE BUTTON
-    //
-    // Expected:
+    // ----------------------------------------------
+    // EXPECTED:
     //
     // report:dismiss:REPORT_ID
     // report:hide:REPORT_ID
     // report:delete:REPORT_ID
-    // ------------------------------------------------
+    // ----------------------------------------------
 
     const parts =
       customId.split(":");
 
     if (
-      parts.length !== 3 ||
-      parts[0] !== "report"
+      parts.length !==
+        3 ||
+      parts[0] !==
+        "report"
     ) {
       return NextResponse.json({
         type: 4,
+
         data: {
           content:
             "Invalid report action.",
+
           flags: 64
         }
       });
@@ -395,181 +646,88 @@ export async function POST(
     const reportId =
       parts[2];
 
+    // ----------------------------------------------
+    // VALID ACTION
+    // ----------------------------------------------
+
     if (
       ![
         "dismiss",
         "hide",
         "delete"
-      ].includes(action)
+      ].includes(
+        action
+      )
     ) {
       return NextResponse.json({
         type: 4,
+
         data: {
           content:
             "Unknown moderation action.",
+
           flags: 64
         }
       });
     }
 
-    // ------------------------------------------------
-    // DATABASE
-    // ------------------------------------------------
+    // ----------------------------------------------
+    // IMPORTANT:
+    //
+    // ACK DISCORD IMMEDIATELY.
+    //
+    // type: 5 = DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+    //
+    // This prevents:
+    //
+    // "The application did not respond"
+    // ----------------------------------------------
 
-    const client =
-      await clientPromise;
-
-    const db =
-      client.db(
-        "krispyskin"
-      );
-
-    const report =
-      await findReport(
-        db,
-        reportId
-      );
-
-    if (!report) {
-      return NextResponse.json({
-        type: 4,
-        data: {
-          content:
-            "Report not found.",
-          flags: 64
-        }
+    const response =
+      NextResponse.json({
+        type: 5
       });
-    }
 
-    // ------------------------------------------------
-    // MODERATOR
-    // ------------------------------------------------
+    // ----------------------------------------------
+    // PROCESS AFTER ACK
+    //
+    // Do not await this before returning response.
+    // ----------------------------------------------
 
-    const moderator =
-      interaction.member
-        ?.user?.username ||
-      interaction.user
-        ?.username ||
-      "Discord Admin";
-
-    // ------------------------------------------------
-    // DISMISS
-    // ------------------------------------------------
-
-    if (
-      action === "dismiss"
-    ) {
-      await updateReport(
-        db,
-        reportId,
-        "dismissed",
-        moderator
-      );
-
-      await updateDiscordMessage(
-        interaction,
-        "dismissed"
-      );
-
-      return NextResponse.json({
-        type: 4,
-        data: {
-          content:
-            "Report dismissed.",
-          flags: 64
-        }
-      });
-    }
-
-    // ------------------------------------------------
-    // HIDE
-    // ------------------------------------------------
-
-    if (
-      action === "hide"
-    ) {
-      await hidePost(
-        db,
-        report
-      );
-
-      await updateReport(
-        db,
-        reportId,
-        "hidden",
-        moderator
-      );
-
-      await updateDiscordMessage(
-        interaction,
-        "hidden"
-      );
-
-      return NextResponse.json({
-        type: 4,
-        data: {
-          content:
-            "Post hidden and report marked as hidden.",
-          flags: 64
-        }
-      });
-    }
-
-    // ------------------------------------------------
-    // DELETE
-    // ------------------------------------------------
-
-    if (
-      action === "delete"
-    ) {
-      await deletePost(
-        db,
-        report
-      );
-
-      await updateReport(
-        db,
-        reportId,
-        "deleted",
-        moderator
-      );
-
-      await updateDiscordMessage(
-        interaction,
-        "deleted"
-      );
-
-      return NextResponse.json({
-        type: 4,
-        data: {
-          content:
-            "Post deleted and report marked as deleted.",
-          flags: 64
-        }
-      });
-    }
-
-    return NextResponse.json({
-      type: 4,
-      data: {
-        content:
-          "Nothing to do.",
-        flags: 64
+    processModeration(
+      interaction,
+      action,
+      reportId
+    ).catch(
+      (error) => {
+        console.error(
+          "Background moderation error:",
+          error
+        );
       }
-    });
+    );
+
+    return response;
   } catch (error) {
     console.error(
-      "Discord moderation error:",
+      "Discord interaction error:",
       error
     );
 
-    return NextResponse.json({
-      type: 4,
-      data: {
-        content:
-          "Moderation action failed.",
-        flags: 64
+    return NextResponse.json(
+      {
+        type: 4,
+
+        data: {
+          content:
+            "Internal moderation error.",
+
+          flags: 64
+        }
+      },
+      {
+        status: 500
       }
-    });
+    );
   }
 }
