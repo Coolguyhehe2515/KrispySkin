@@ -27,9 +27,7 @@ function safeEqual(a, b) {
 export async function POST(request) {
   try {
     const sessionToken =
-      request.cookies.get(
-        "krispy_skin_session"
-      )?.value;
+      request.cookies.get("krispy_skin")?.value;
 
     if (!sessionToken) {
       return NextResponse.json(
@@ -60,8 +58,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "All password fields are required"
+          error: "All password fields are required"
         },
         { status: 400 }
       );
@@ -71,8 +68,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "New passwords do not match"
+          error: "New passwords do not match"
         },
         { status: 400 }
       );
@@ -132,10 +128,9 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Password authentication is not available for this account"
+          error: "Password credentials are missing"
         },
-        { status: 400 }
+        { status: 500 }
       );
     }
 
@@ -154,8 +149,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Current password is incorrect"
+          error: "Current password is incorrect"
         },
         { status: 401 }
       );
@@ -190,12 +184,10 @@ export async function POST(request) {
     const response = NextResponse.json({
       success: true,
       message:
-        "Password changed successfully. Please log in again."
+        "Password changed successfully. Please login again."
     });
 
-    response.cookies.delete(
-      "krispy_skin_session"
-    );
+    response.cookies.delete("krispy_skin");
 
     return response;
   } catch (error) {
@@ -212,4 +204,4 @@ export async function POST(request) {
       { status: 500 }
     );
   }
-}
+      }
