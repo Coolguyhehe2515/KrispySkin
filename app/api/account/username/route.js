@@ -6,9 +6,7 @@ export const runtime = "nodejs";
 export async function POST(request) {
   try {
     const sessionToken =
-      request.cookies.get(
-        "krispy_skin_session"
-      )?.value;
+      request.cookies.get("krispy_skin")?.value;
 
     if (!sessionToken) {
       return NextResponse.json(
@@ -42,16 +40,13 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Username must be 3-24 characters"
+          error: "Username must be 3-24 characters"
         },
         { status: 400 }
       );
     }
 
-    if (
-      !/^[a-zA-Z0-9_]+$/.test(username)
-    ) {
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       return NextResponse.json(
         {
           success: false,
@@ -83,6 +78,21 @@ export async function POST(request) {
       );
     }
 
+    const user =
+      await db.collection("users").findOne({
+        id: session.userId
+      });
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User not found"
+        },
+        { status: 404 }
+      );
+    }
+
     const usernameLower =
       username.toLowerCase();
 
@@ -90,7 +100,7 @@ export async function POST(request) {
       await db.collection("users").findOne({
         usernameLower,
         id: {
-          $ne: session.userId
+          $ne: user.id
         }
       });
 
@@ -106,7 +116,7 @@ export async function POST(request) {
 
     await db.collection("users").updateOne(
       {
-        id: session.userId
+        id: user.id
       },
       {
         $set: {
