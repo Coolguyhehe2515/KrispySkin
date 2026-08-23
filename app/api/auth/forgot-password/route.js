@@ -47,62 +47,196 @@ async function sendResetEmail(email, code) {
     "https://api.brevo.com/v3/smtp/email",
     {
       method: "POST",
+
       headers: {
         accept: "application/json",
         "api-key": apiKey,
         "content-type": "application/json"
       },
+
       body: JSON.stringify({
         sender: {
-          name: "KrispySkin",
-          email: fromEmail
+          email: fromEmail,
+          name: "KrispySkin"
         },
+
         to: [
           {
-            email
+            email: email
           }
         ],
+
         subject: "KrispySkin Password Reset",
+
         htmlContent: `
-          <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
-            <h2>KrispySkin Password Reset</h2>
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <title>KrispySkin Password Reset</title>
+            </head>
 
-            <p>Your password reset code is:</p>
+            <body
+              style="
+                margin:0;
+                padding:0;
+                background:#f5f5f5;
+                font-family:Arial,Helvetica,sans-serif;
+              "
+            >
+              <div
+                style="
+                  max-width:520px;
+                  margin:40px auto;
+                  background:#ffffff;
+                  padding:32px;
+                  border-radius:12px;
+                  box-shadow:0 4px 20px rgba(0,0,0,0.08);
+                "
+              >
+                <h2
+                  style="
+                    margin-top:0;
+                    color:#111111;
+                  "
+                >
+                  KrispySkin Password Reset
+                </h2>
 
-            <h1 style="letter-spacing:8px;font-size:32px">
-              ${code}
-            </h1>
+                <p
+                  style="
+                    color:#444444;
+                    font-size:15px;
+                    line-height:1.6;
+                  "
+                >
+                  We received a request to reset your
+                  KrispySkin account password.
+                </p>
 
-            <p>
-              This code expires in 10 minutes.
-            </p>
+                <p
+                  style="
+                    color:#444444;
+                    font-size:15px;
+                  "
+                >
+                  Your verification code is:
+                </p>
 
-            <p>
-              If you did not request a password reset,
-              you can safely ignore this email.
-            </p>
-          </div>
+                <div
+                  style="
+                    margin:24px 0;
+                    padding:20px;
+                    text-align:center;
+                    background:#f3f3f3;
+                    border-radius:10px;
+                  "
+                >
+                  <span
+                    style="
+                      font-size:32px;
+                      font-weight:bold;
+                      letter-spacing:8px;
+                      color:#111111;
+                    "
+                  >
+                    ${code}
+                  </span>
+                </div>
+
+                <p
+                  style="
+                    color:#555555;
+                    font-size:14px;
+                    line-height:1.6;
+                  "
+                >
+                  This code will expire in
+                  <strong>10 minutes</strong>.
+                </p>
+
+                <p
+                  style="
+                    color:#777777;
+                    font-size:13px;
+                    line-height:1.6;
+                  "
+                >
+                  If you did not request a password reset,
+                  you can safely ignore this email.
+                </p>
+
+                <hr
+                  style="
+                    border:0;
+                    border-top:1px solid #eeeeee;
+                    margin:28px 0;
+                  "
+                >
+
+                <p
+                  style="
+                    color:#999999;
+                    font-size:12px;
+                    margin:0;
+                  "
+                >
+                  This is an automated message from KrispySkin.
+                </p>
+              </div>
+            </body>
+          </html>
         `,
+
         textContent:
-          `Your KrispySkin password reset code is: ${code}. ` +
-          `This code expires in 10 minutes. ` +
-          `If you did not request a password reset, you can safely ignore this email.`
+          `KrispySkin Password Reset\n\n` +
+          `Your password reset verification code is: ${code}\n\n` +
+          `This code expires in 10 minutes.\n\n` +
+          `If you did not request a password reset, you can safely ignore this email.`,
+
+        tags: [
+          "krispyskin",
+          "password-reset"
+        ]
       })
     }
   );
 
-  if (!response.ok) {
-    const errorText = await response.text();
+  const responseText =
+    await response.text();
 
+  if (!response.ok) {
     console.error(
       "Brevo error:",
-      errorText
+      responseText
     );
 
     throw new Error(
-      "Failed to send reset email"
+      `Brevo API ${response.status}: ${responseText}`
     );
   }
+
+  let result = null;
+
+  try {
+    result = JSON.parse(
+      responseText
+    );
+  } catch {
+    result = null;
+  }
+
+  console.log(
+    "Brevo email accepted:",
+    {
+      status: response.status,
+      messageId:
+        result?.messageId || null,
+      recipient: email
+    }
+  );
+
+  return result;
 }
 
 export async function POST(request) {
@@ -128,7 +262,9 @@ export async function POST(request) {
           success: false,
           error: "Email is required"
         },
-        { status: 400 }
+        {
+          status: 400
+        }
       );
     }
 
@@ -172,8 +308,8 @@ export async function POST(request) {
       }
 
       /*
-       * Only users who have verified their
-       * email are authorized for password recovery.
+       * Only verified users are authorized
+       * for password recovery.
        */
       if (
         user.emailVerified !== true
@@ -184,7 +320,9 @@ export async function POST(request) {
             error:
               "This account is not authorized for password recovery. Please verify your email address first."
           },
-          { status: 403 }
+          {
+            status: 403
+          }
         );
       }
 
@@ -201,7 +339,9 @@ export async function POST(request) {
             error:
               "This account has been banned."
           },
-          { status: 403 }
+          {
+            status: 403
+          }
         );
       }
 
@@ -265,14 +405,18 @@ export async function POST(request) {
           body.code || ""
         ).trim();
 
-      if (!/^\d{6}$/.test(code)) {
+      if (
+        !/^\d{6}$/.test(code)
+      ) {
         return NextResponse.json(
           {
             success: false,
             error:
               "Enter the 6-digit verification code"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -288,7 +432,9 @@ export async function POST(request) {
             error:
               "Invalid or expired verification code"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -307,7 +453,9 @@ export async function POST(request) {
             success: false,
             error: "User not found"
           },
-          { status: 404 }
+          {
+            status: 404
+          }
         );
       }
 
@@ -324,7 +472,9 @@ export async function POST(request) {
             error:
               "This account is not authorized for password recovery. Please verify your email address first."
           },
-          { status: 403 }
+          {
+            status: 403
+          }
         );
       }
 
@@ -341,7 +491,9 @@ export async function POST(request) {
             error:
               "This account has been banned."
           },
-          { status: 403 }
+          {
+            status: 403
+          }
         );
       }
 
@@ -360,7 +512,9 @@ export async function POST(request) {
             error:
               "Verification code has expired"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -377,7 +531,9 @@ export async function POST(request) {
             error:
               "Too many verification attempts"
           },
-          { status: 429 }
+          {
+            status: 429
+          }
         );
       }
 
@@ -407,7 +563,9 @@ export async function POST(request) {
             error:
               "Invalid verification code"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -437,14 +595,18 @@ export async function POST(request) {
           body.confirmPassword || ""
         );
 
-      if (!/^\d{6}$/.test(code)) {
+      if (
+        !/^\d{6}$/.test(code)
+      ) {
         return NextResponse.json(
           {
             success: false,
             error:
               "Invalid verification code"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -457,7 +619,9 @@ export async function POST(request) {
             error:
               "Password must be at least 8 characters"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -471,7 +635,9 @@ export async function POST(request) {
             error:
               "Passwords do not match"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -487,7 +653,9 @@ export async function POST(request) {
             error:
               "Invalid or expired verification code"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -506,7 +674,9 @@ export async function POST(request) {
             success: false,
             error: "User not found"
           },
-          { status: 404 }
+          {
+            status: 404
+          }
         );
       }
 
@@ -527,7 +697,9 @@ export async function POST(request) {
             error:
               "This account is not authorized for password recovery. Please verify your email address first."
           },
-          { status: 403 }
+          {
+            status: 403
+          }
         );
       }
 
@@ -544,7 +716,9 @@ export async function POST(request) {
             error:
               "This account has been banned."
           },
-          { status: 403 }
+          {
+            status: 403
+          }
         );
       }
 
@@ -563,7 +737,9 @@ export async function POST(request) {
             error:
               "Verification code has expired"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -582,7 +758,9 @@ export async function POST(request) {
             error:
               "Invalid verification code"
           },
-          { status: 400 }
+          {
+            status: 400
+          }
         );
       }
 
@@ -605,8 +783,10 @@ export async function POST(request) {
           $set: {
             passwordHash:
               newHash,
+
             passwordSalt:
               newSalt,
+
             passwordChangedAt:
               new Date()
           }
@@ -637,7 +817,9 @@ export async function POST(request) {
         success: false,
         error: "Invalid action"
       },
-      { status: 400 }
+      {
+        status: 400
+      }
     );
   } catch (error) {
     console.error(
@@ -651,7 +833,9 @@ export async function POST(request) {
         error:
           "Failed to process password reset"
       },
-      { status: 500 }
+      {
+        status: 500
+      }
     );
   }
-}
+          }
