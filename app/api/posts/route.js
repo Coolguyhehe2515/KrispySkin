@@ -87,7 +87,7 @@ export async function GET() {
 export async function POST(request) {
   try {
     const sessionToken =
-      request.cookies.get("krispyskin_session")?.value;
+      request.cookies.get("krispy_skin_session")?.value;
 
     if (!sessionToken) {
       return NextResponse.json(
