@@ -6,142 +6,193 @@ export const runtime = "nodejs";
 const DEFAULT_PROFILE_PICTURE =
   "https://i.postimg.cc/JhwdnS9p/651c6da502353948bdc929f02da2b8e0.jpg";
 
-const VALID_THEMES = [
-  "system",
-  "light",
-  "dark"
-];
+async function getAuthenticatedUser(request) {
+  const sessionToken =
+    request.cookies.get("krispy_skin")?.value;
 
-export async function POST(request) {
-  try {
-    const sessionToken =
-      request.cookies.get(
-        "krispy_skin_session"
-      )?.value;
-
-    if (!sessionToken) {
-      return NextResponse.json(
+  if (!sessionToken) {
+    return {
+      error: NextResponse.json(
         {
           success: false,
           error: "You must be logged in"
         },
         { status: 401 }
-      );
-    }
+      )
+    };
+  }
 
-    const body = await request.json();
+  const client = await clientPromise;
+  const db = client.db("krispyskin");
 
-    let profilePicture =
-      String(
-        body.profilePicture || ""
-      ).trim();
+  const session =
+    await db.collection("sessions").findOne({
+      token: sessionToken
+    });
 
-    const theme =
-      String(
-        body.theme || "system"
-      ).toLowerCase();
-
-    if (!VALID_THEMES.includes(theme)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid theme"
-        },
-        { status: 400 }
-      );
-    }
-
-    if (profilePicture) {
-      try {
-        const url =
-          new URL(profilePicture);
-
-        if (
-          url.protocol !== "http:" &&
-          url.protocol !== "https:"
-        ) {
-          throw new Error("Invalid protocol");
-        }
-      } catch {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Profile picture must be a valid image URL"
-          },
-          { status: 400 }
-        );
-      }
-
-      if (profilePicture.length > 2000) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Profile picture URL is too long"
-          },
-          { status: 400 }
-        );
-      }
-    } else {
-      profilePicture = "";
-    }
-
-    const client = await clientPromise;
-    const db = client.db("krispyskin");
-
-    const session =
-      await db.collection("sessions").findOne({
-        token: sessionToken
-      });
-
-    if (
-      !session ||
-      new Date(session.expiresAt) <= new Date()
-    ) {
-      return NextResponse.json(
+  if (
+    !session ||
+    new Date(session.expiresAt) <= new Date()
+  ) {
+    return {
+      error: NextResponse.json(
         {
           success: false,
           error: "Session expired"
         },
         { status: 401 }
-      );
-    }
+      )
+    };
+  }
 
-    const user =
-      await db.collection("users").findOne({
-        id: session.userId
-      });
+  const user =
+    await db.collection("users").findOne({
+      id: session.userId
+    });
 
-    if (!user) {
-      return NextResponse.json(
+  if (!user) {
+    return {
+      error: NextResponse.json(
         {
           success: false,
           error: "User not found"
         },
         { status: 404 }
-      );
-    }
+      )
+    };
+  }
 
-    await db.collection("users").updateOne(
-      {
-        id: user.id
-      },
-      {
-        $set: {
-          profilePicture,
-          theme,
-          profileUpdatedAt: new Date()
-        }
-      }
-    );
+  return {
+    db,
+    user
+  };
+}
+
+export async function GET(request) {
+  try {
+    const result =
+      await getAuthenticatedUser(request);
+
+    if (result.error) {
+      return result.error;
+    }
 
     return NextResponse.json({
       success: true,
-      profilePicture:
-        profilePicture ||
-        DEFAULT_PROFILE_PICTURE,
-      theme
+      profile: {
+        id: result.user.id,
+        username:
+          result.user.username || "",
+        email:
+          result.user.email || "",
+        emailVerified:
+          result.user.emailVerified === true,
+        profilePicture:
+          result.user.profilePicture ||
+          DEFAULT_PROFILE_PICTURE
+      }
+    });
+  } catch (error) {
+    console.error(
+      "Profile fetch error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to load profile"
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request) {
+  try {
+    const result =
+      await getAuthenticatedUser(request);
+
+    if (result.error) {
+      return result.error;
+    }
+
+    const body = await request.json();
+
+    const profilePicture =
+      String(
+        body.profilePicture || ""
+      ).trim();
+
+    if (!profilePicture) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Profile picture URL is required"
+        },
+        { status: 400 }
+      );
+    }
+
+    if (profilePicture.length > 2048) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Profile picture URL is too long"
+        },
+        { status: 400 }
+      );
+    }
+
+    let parsedUrl;
+
+    try {
+      parsedUrl =
+        new URL(profilePicture);
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Invalid profile picture URL"
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      parsedUrl.protocol !== "https:"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Profile picture must use HTTPS"
+        },
+        { status: 400 }
+      );
+    }
+
+    await result.db
+      .collection("users")
+      .updateOne(
+        {
+          id: result.user.id
+        },
+        {
+          $set: {
+            profilePicture,
+            profilePictureUpdatedAt:
+              new Date()
+          }
+        }
+      );
+
+    return NextResponse.json({
+      success: true,
+      profilePicture
     });
   } catch (error) {
     console.error(
@@ -152,7 +203,8 @@ export async function POST(request) {
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to update profile"
+        error:
+          "Failed to update profile"
       },
       { status: 500 }
     );
