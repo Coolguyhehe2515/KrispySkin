@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export async function DELETE(request) {
   try {
     const sessionToken =
-      request.cookies.get("krispyskin_session")?.value;
+      request.cookies.get("krispy_skin_session")?.value;
 
     if (!sessionToken) {
       return NextResponse.json(
