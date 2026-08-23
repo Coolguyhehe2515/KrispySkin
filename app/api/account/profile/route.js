@@ -3,14 +3,50 @@ import clientPromise from "../../../../lib/mongodb";
 
 export const runtime = "nodejs";
 
-const DEFAULT_PROFILE_PICTURE =
+const DEFAULT_AVATAR =
   "https://i.postimg.cc/JhwdnS9p/651c6da502353948bdc929f02da2b8e0.jpg";
+
+async function getAuthenticatedUser(request) {
+  const sessionToken =
+    request.cookies.get(
+      "krispy_skin_session"
+    )?.value;
+
+  if (!sessionToken) {
+    return null;
+  }
+
+  const client = await clientPromise;
+  const db = client.db("krispsyskin");
+
+  const session =
+    await db.collection("sessions").findOne({
+      token: sessionToken
+    });
+
+  if (
+    !session ||
+    new Date(session.expiresAt) <= new Date()
+  ) {
+    return null;
+  }
+
+  const user =
+    await db.collection("users").findOne({
+      id: session.userId
+    });
+
+  return user || null;
+}
 
 export async function GET(request) {
   try {
+    const client = await clientPromise;
+    const db = client.db("krispy_skin");
+
     const sessionToken =
       request.cookies.get(
-        "krispyskin_session"
+        "krispy_skin_session"
       )?.value;
 
     if (!sessionToken) {
@@ -22,9 +58,6 @@ export async function GET(request) {
         { status: 401 }
       );
     }
-
-    const client = await clientPromise;
-    const db = client.db("krispyskin");
 
     const session =
       await db.collection("sessions").findOne({
@@ -67,33 +100,35 @@ export async function GET(request) {
         email: user.email || null,
         emailVerified:
           user.emailVerified === true,
-        theme: user.theme || "system",
         profilePicture:
           user.profilePicture ||
-          DEFAULT_PROFILE_PICTURE
+          DEFAULT_AVATAR
       }
     });
   } catch (error) {
     console.error(
-      "Get account profile error:",
+      "Account profile GET error:",
       error
     );
 
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to load account profile"
+        error: "Failed to load profile"
       },
       { status: 500 }
     );
   }
 }
 
-export async function PATCH(request) {
+export async function POST(request) {
   try {
+    const client = await clientPromise;
+    const db = client.db("krispy_skin");
+
     const sessionToken =
       request.cookies.get(
-        "krispyskin_session"
+        "krispy_skin_session"
       )?.value;
 
     if (!sessionToken) {
@@ -105,11 +140,6 @@ export async function PATCH(request) {
         { status: 401 }
       );
     }
-
-    const body = await request.json();
-
-    const client = await clientPromise;
-    const db = client.db("krispyskin");
 
     const session =
       await db.collection("sessions").findOne({
@@ -129,55 +159,35 @@ export async function PATCH(request) {
       );
     }
 
-    const user =
-      await db.collection("users").findOne({
-        id: session.userId
-      });
+    const body = await request.json();
 
-    if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "User not found"
-        },
-        { status: 404 }
-      );
-    }
+    const profilePicture =
+      String(
+        body.profilePicture || ""
+      ).trim();
 
-    const updates = {};
+    if (profilePicture) {
+      try {
+        const url = new URL(
+          profilePicture
+        );
 
-    if (body.theme !== undefined) {
-      const theme =
-        String(body.theme).toLowerCase();
-
-      const allowedThemes = [
-        "system",
-        "light",
-        "dark"
-      ];
-
-      if (
-        !allowedThemes.includes(theme)
-      ) {
+        if (
+          url.protocol !== "http:" &&
+          url.protocol !== "https:"
+        ) {
+          throw new Error();
+        }
+      } catch {
         return NextResponse.json(
           {
             success: false,
-            error: "Invalid theme"
+            error:
+              "Invalid profile picture URL"
           },
           { status: 400 }
         );
       }
-
-      updates.theme = theme;
-    }
-
-    if (
-      body.profilePicture !== undefined
-    ) {
-      const profilePicture =
-        String(
-          body.profilePicture || ""
-        ).trim();
 
       if (profilePicture.length > 2048) {
         return NextResponse.json(
@@ -189,92 +199,45 @@ export async function PATCH(request) {
           { status: 400 }
         );
       }
-
-      if (profilePicture) {
-        try {
-          const url =
-            new URL(profilePicture);
-
-          if (
-            url.protocol !== "https:"
-          ) {
-            return NextResponse.json(
-              {
-                success: false,
-                error:
-                  "Profile picture must use HTTPS"
-              },
-              { status: 400 }
-            );
-          }
-        } catch {
-          return NextResponse.json(
-            {
-              success: false,
-              error:
-                "Invalid profile picture URL"
-            },
-            { status: 400 }
-          );
-        }
-
-        updates.profilePicture =
-          profilePicture;
-      } else {
-        updates.profilePicture =
-          DEFAULT_PROFILE_PICTURE;
-      }
     }
 
-    if (
-      Object.keys(updates).length === 0
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "No changes provided"
-        },
-        { status: 400 }
-      );
-    }
-
-    updates.updatedAt = new Date();
+    const finalPicture =
+      profilePicture ||
+      DEFAULT_AVATAR;
 
     await db.collection("users").updateOne(
       {
-        id: user.id
+        id: session.userId
       },
       {
-        $set: updates
+        $set: {
+          profilePicture:
+            finalPicture,
+          profilePictureUpdatedAt:
+            new Date()
+        }
       }
     );
 
     return NextResponse.json({
       success: true,
-      message: "Profile updated successfully",
-      profile: {
-        theme:
-          updates.theme ||
-          user.theme ||
-          "system",
+      user: {
         profilePicture:
-          updates.profilePicture ||
-          user.profilePicture ||
-          DEFAULT_PROFILE_PICTURE
+          finalPicture
       }
     });
   } catch (error) {
     console.error(
-      "Update account profile error:",
+      "Account profile POST error:",
       error
     );
 
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to update profile"
+        error: "Failed to save profile"
       },
       { status: 500 }
     );
   }
-            }
+}
