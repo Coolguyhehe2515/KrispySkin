@@ -17,17 +17,13 @@ public class PauseMenuMixin {
             method = "initWidgets",
             at = @At("TAIL")
     )
-    private void krispyskin$addSelector(
-            CallbackInfo ci
-    ) {
-        GameMenuScreen screen =
-                (GameMenuScreen) (Object) this;
+    private void krispyskin$addSelector(CallbackInfo ci) {
+        GameMenuScreen screen = (GameMenuScreen) (Object) this;
 
-        screen.addDrawableChild(
+        ((ScreenInvoker) screen).krispyskin$addDrawableChild(
                 ButtonWidget.builder(
                         Text.literal("←"),
-                        button ->
-                                SkinSelection.previous()
+                        button -> SkinSelection.previous()
                 )
                 .dimensions(
                         screen.width - 190,
@@ -38,11 +34,10 @@ public class PauseMenuMixin {
                 .build()
         );
 
-        screen.addDrawableChild(
+        ((ScreenInvoker) screen).krispyskin$addDrawableChild(
                 ButtonWidget.builder(
                         Text.literal("→"),
-                        button ->
-                                SkinSelection.next()
+                        button -> SkinSelection.next()
                 )
                 .dimensions(
                         screen.width - 70,
@@ -65,8 +60,7 @@ public class PauseMenuMixin {
             float delta,
             CallbackInfo ci
     ) {
-        GameMenuScreen screen =
-                (GameMenuScreen) (Object) this;
+        GameMenuScreen screen = (GameMenuScreen) (Object) this;
 
         PlayerPreviewRenderer.render(
                 context.getMatrices(),
