@@ -1,5 +1,6 @@
 package com.krispyskin.mod.mixin;
 
+import com.krispyskin.mod.client.PlayerPreviewRenderer;
 import com.krispyskin.mod.skin.SkinSelection;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.GameMenuScreen;
