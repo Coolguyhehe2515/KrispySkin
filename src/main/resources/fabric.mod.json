@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "krispyskin",
+  "version": "${version}",
+  "name": "KrispySkin",
+  "description": "KrispySkin Minecraft integration",
+  "authors": [
+    "KrispySkin"
+  ],
+  "environment": "*",
+
+  "entrypoints": {
+    "main": [
+      "com.krispyskin.mod.KrispySkin"
+    ],
+    "client": [
+      "com.krispyskin.mod.client.KrispySkinClient"
+    ]
+  },
+
+  "mixins": [
+    "krispyskin.mixins.json"
+  ],
+
+  "depends": {
+    "fabricloader": ">=0.14.22",
+    "minecraft": "1.20.1",
+    "fabric-api": "*"
+  }
+}
