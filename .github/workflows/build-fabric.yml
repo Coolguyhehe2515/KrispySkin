@@ -25,41 +25,24 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Check project files
-        run: |
-          echo "=== Project files ==="
-          find . -maxdepth 5 -type f \
-            ! -path "./.git/*" \
-            | sort
-
-      - name: Setup Gradle
+      - name: Install Gradle 8.5
         uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "8.5"
 
-      - name: Check Gradle project
-        run: |
-          echo "=== Gradle files ==="
-          ls -la
-
-          if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
-            echo "ERROR: build.gradle or build.gradle.kts not found!"
-            exit 1
-          fi
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.5
 
       - name: Make Gradle executable
-        run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          fi
+        run: chmod +x ./gradlew
+
+      - name: Show Gradle Version
+        run: ./gradlew --version
 
       - name: Build Fabric Mod
-        run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew build --no-daemon
-          else
-            gradle build --no-daemon
-          fi
+        run: ./gradlew build --no-daemon
 
-      - name: List build output
+      - name: List JAR
         run: |
           echo "=== Build output ==="
           find build/libs -maxdepth 1 -type f -print
