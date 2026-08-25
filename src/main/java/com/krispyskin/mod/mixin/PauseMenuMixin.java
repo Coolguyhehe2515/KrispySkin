@@ -2,6 +2,7 @@ package com.krispyskin.mod.mixin;
 
 import com.krispyskin.mod.client.PlayerPreviewRenderer;
 import com.krispyskin.mod.screen.WardrobeScreen;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -22,25 +23,25 @@ public class PauseMenuMixin {
         GameMenuScreen screen =
                 (GameMenuScreen) (Object) this;
 
-        screen.addDrawableChild(
-                ButtonWidget.builder(
-                        Text.literal("WARDROBE"),
-                        button -> {
-                            if (screen.client != null) {
-                                screen.client.setScreen(
-                                        new WardrobeScreen(screen)
-                                );
-                            }
-                        }
-                )
-                .dimensions(
-                        screen.width - 160,
-                        screen.height - 70,
-                        100,
-                        20
-                )
-                .build()
-        );
+        ButtonWidget button = ButtonWidget.builder(
+                Text.literal("WARDROBE"),
+                ignored -> {
+                    MinecraftClient client = MinecraftClient.getInstance();
+
+                    if (client != null) {
+                        client.setScreen(new WardrobeScreen(screen));
+                    }
+                }
+        )
+        .dimensions(
+                screen.width - 160,
+                screen.height - 70,
+                100,
+                20
+        )
+        .build();
+
+        ((ScreenInvoker) screen).krispyskin$addDrawableChild(button);
     }
 
     @Inject(
