@@ -1,7 +1,6 @@
 package com.krispyskin.mod.screen;
 
 import com.krispyskin.mod.skin.SkinSelection;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -13,7 +12,6 @@ import java.util.List;
 public class WardrobeScreen extends Screen {
 
     private final Screen parent;
-
     private final List<SkinEntry> skins = new ArrayList<>();
 
     private int selectedIndex = 0;
@@ -24,14 +22,9 @@ public class WardrobeScreen extends Screen {
 
     public WardrobeScreen(Screen parent) {
         super(Text.literal("KrispySkin Wardrobe"));
+
         this.parent = parent;
 
-        /*
-         * Dummy/local skins.
-         *
-         * Nanti bagian ini bisa diganti dengan data
-         * yang berasal dari KrispySkin API.
-         */
         skins.add(new SkinEntry("Default"));
         skins.add(new SkinEntry("Krispy"));
         skins.add(new SkinEntry("Classic"));
@@ -44,9 +37,6 @@ public class WardrobeScreen extends Screen {
 
         int centerX = this.width / 2;
 
-        /*
-         * Tombol kembali.
-         */
         this.addDrawableChild(
                 ButtonWidget.builder(
                         Text.literal("Back"),
@@ -61,9 +51,6 @@ public class WardrobeScreen extends Screen {
                 .build()
         );
 
-        /*
-         * Arrow kiri.
-         */
         previousButton = this.addDrawableChild(
                 ButtonWidget.builder(
                         Text.literal("←"),
@@ -78,9 +65,6 @@ public class WardrobeScreen extends Screen {
                 .build()
         );
 
-        /*
-         * Arrow kanan.
-         */
         nextButton = this.addDrawableChild(
                 ButtonWidget.builder(
                         Text.literal("→"),
@@ -95,9 +79,6 @@ public class WardrobeScreen extends Screen {
                 .build()
         );
 
-        /*
-         * Tombol equip/select.
-         */
         selectButton = this.addDrawableChild(
                 ButtonWidget.builder(
                         Text.literal("Select"),
@@ -148,46 +129,25 @@ public class WardrobeScreen extends Screen {
             return;
         }
 
-        SkinEntry selected = skins.get(selectedIndex);
-
-        /*
-         * Untuk sementara kita hubungkan dengan SkinSelection.
-         *
-         * Nanti ini bisa diganti dengan:
-         * KrispySkinAPI.selectSkin(...)
-         */
-        SkinSelection.setSelected(selected.name());
+        SkinSelection.setSelectedSkin(selectedIndex);
 
         updateButtons();
     }
 
     private void updateButtons() {
-        if (skins.isEmpty()) {
-            if (previousButton != null) {
-                previousButton.active = false;
-            }
-
-            if (nextButton != null) {
-                nextButton.active = false;
-            }
-
-            if (selectButton != null) {
-                selectButton.active = false;
-            }
-
-            return;
-        }
+        boolean hasSkins = !skins.isEmpty();
+        boolean multipleSkins = skins.size() > 1;
 
         if (previousButton != null) {
-            previousButton.active = skins.size() > 1;
+            previousButton.active = multipleSkins;
         }
 
         if (nextButton != null) {
-            nextButton.active = skins.size() > 1;
+            nextButton.active = multipleSkins;
         }
 
         if (selectButton != null) {
-            selectButton.active = true;
+            selectButton.active = hasSkins;
         }
     }
 
@@ -205,16 +165,10 @@ public class WardrobeScreen extends Screen {
             int mouseY,
             float delta
     ) {
-        /*
-         * Background vanilla.
-         */
         this.renderBackground(context);
 
         int centerX = this.width / 2;
 
-        /*
-         * Header.
-         */
         context.drawCenteredTextWithShadow(
                 this.textRenderer,
                 Text.literal("WARDROBE"),
@@ -223,9 +177,6 @@ public class WardrobeScreen extends Screen {
                 0xFFFFFFFF
         );
 
-        /*
-         * Skin name.
-         */
         if (!skins.isEmpty()) {
             SkinEntry selected = skins.get(selectedIndex);
 
@@ -238,16 +189,12 @@ public class WardrobeScreen extends Screen {
             );
         }
 
-        /*
-         * Preview area.
-         *
-         * PlayerPreviewRenderer nanti bisa dipakai di sini.
-         */
-        renderPreview(context, centerX, this.height / 2);
+        renderPreview(
+                context,
+                centerX,
+                this.height / 2
+        );
 
-        /*
-         * Skin counter.
-         */
         if (!skins.isEmpty()) {
             String counter =
                     (selectedIndex + 1) + " / " + skins.size();
@@ -261,10 +208,12 @@ public class WardrobeScreen extends Screen {
             );
         }
 
-        /*
-         * Render widgets.
-         */
-        super.render(context, mouseX, mouseY, delta);
+        super.render(
+                context,
+                mouseX,
+                mouseY,
+                delta
+        );
     }
 
     private void renderPreview(
@@ -272,18 +221,6 @@ public class WardrobeScreen extends Screen {
             int x,
             int y
     ) {
-        /*
-         * Untuk sementara area preview.
-         *
-         * Kita sengaja belum memanggil
-         * PlayerPreviewRenderer karena renderer
-         * kamu sekarang mungkin masih memakai
-         * MatrixStack dari pause menu.
-         *
-         * Setelah WardrobeScreen berhasil dibuild,
-         * preview yang sama bisa kita sambungkan.
-         */
-
         int previewWidth = 120;
         int previewHeight = 180;
 
