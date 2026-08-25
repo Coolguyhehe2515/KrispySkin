@@ -4,6 +4,8 @@ public final class SkinSelection {
 
     private static int selectedSkin = 0;
 
+    private static String selectedSkinId;
+
     private SkinSelection() {
     }
 
@@ -11,12 +13,13 @@ public final class SkinSelection {
         return selectedSkin;
     }
 
-    public static void setSelectedSkin(int index) {
-        if (index < 0) {
-            selectedSkin = 0;
-        } else {
-            selectedSkin = index;
-        }
+    public static void setSelectedSkin(
+            int index
+    ) {
+        selectedSkin = Math.max(
+                0,
+                index
+        );
     }
 
     public static void next() {
@@ -29,5 +32,15 @@ public final class SkinSelection {
         if (selectedSkin < 0) {
             selectedSkin = 0;
         }
+    }
+
+    public static String getSelectedSkinId() {
+        return selectedSkinId;
+    }
+
+    public static void setSelectedSkinId(
+            String skinId
+    ) {
+        selectedSkinId = skinId;
     }
 }
