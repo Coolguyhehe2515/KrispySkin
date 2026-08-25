@@ -19,29 +19,30 @@ public class PauseMenuMixin {
             method = "initWidgets",
             at = @At("TAIL")
     )
-    private void krispyskin$addWardrobeButton(CallbackInfo ci) {
+    private void krispyskin$addWardrobeButton(
+            CallbackInfo ci
+    ) {
         GameMenuScreen screen =
                 (GameMenuScreen) (Object) this;
 
-        ButtonWidget button = ButtonWidget.builder(
-                Text.literal("WARDROBE"),
-                ignored -> {
-                    MinecraftClient client = MinecraftClient.getInstance();
+        MinecraftClient client =
+                MinecraftClient.getInstance();
 
-                    if (client != null) {
-                        client.setScreen(new WardrobeScreen(screen));
-                    }
-                }
-        )
-        .dimensions(
-                screen.width - 160,
-                screen.height - 70,
-                100,
-                20
-        )
-        .build();
-
-        ((ScreenInvoker) screen).krispyskin$addDrawableChild(button);
+        ((ScreenInvoker) screen).krispyskin$addDrawableChild(
+                ButtonWidget.builder(
+                        Text.literal("Wardrobe"),
+                        button -> client.setScreen(
+                                new WardrobeScreen(screen)
+                        )
+                )
+                .dimensions(
+                        screen.width - 230,
+                        screen.height - 105,
+                        90,
+                        20
+                )
+                .build()
+        );
     }
 
     @Inject(
