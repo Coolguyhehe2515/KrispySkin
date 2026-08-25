@@ -1,7 +1,7 @@
 package com.krispyskin.mod.mixin;
 
 import com.krispyskin.mod.client.PlayerPreviewRenderer;
-import com.krispyskin.mod.skin.SkinSelection;
+import com.krispyskin.mod.screen.WardrobeScreen;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -18,32 +18,25 @@ public class PauseMenuMixin {
             method = "initWidgets",
             at = @At("TAIL")
     )
-    private void krispyskin$addSelector(CallbackInfo ci) {
-        GameMenuScreen screen = (GameMenuScreen) (Object) this;
+    private void krispyskin$addWardrobeButton(CallbackInfo ci) {
+        GameMenuScreen screen =
+                (GameMenuScreen) (Object) this;
 
-        ((ScreenInvoker) screen).krispyskin$addDrawableChild(
+        screen.addDrawableChild(
                 ButtonWidget.builder(
-                        Text.literal("←"),
-                        button -> SkinSelection.previous()
+                        Text.literal("WARDROBE"),
+                        button -> {
+                            if (screen.client != null) {
+                                screen.client.setScreen(
+                                        new WardrobeScreen(screen)
+                                );
+                            }
+                        }
                 )
                 .dimensions(
-                        screen.width - 190,
+                        screen.width - 160,
                         screen.height - 70,
-                        30,
-                        20
-                )
-                .build()
-        );
-
-        ((ScreenInvoker) screen).krispyskin$addDrawableChild(
-                ButtonWidget.builder(
-                        Text.literal("→"),
-                        button -> SkinSelection.next()
-                )
-                .dimensions(
-                        screen.width - 70,
-                        screen.height - 70,
-                        30,
+                        100,
                         20
                 )
                 .build()
@@ -61,7 +54,8 @@ public class PauseMenuMixin {
             float delta,
             CallbackInfo ci
     ) {
-        GameMenuScreen screen = (GameMenuScreen) (Object) this;
+        GameMenuScreen screen =
+                (GameMenuScreen) (Object) this;
 
         PlayerPreviewRenderer.render(
                 context.getMatrices(),
