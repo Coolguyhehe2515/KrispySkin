@@ -11,6 +11,14 @@ public final class SkinSelection {
         return selectedSkin;
     }
 
+    public static void setSelectedSkin(int index) {
+        if (index < 0) {
+            selectedSkin = 0;
+        } else {
+            selectedSkin = index;
+        }
+    }
+
     public static void next() {
         selectedSkin++;
     }
