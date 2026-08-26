@@ -14,16 +14,17 @@ Features
 - 🚀 Vercel-friendly architecture
 - 🔌 Client/mod integration support
 
-Planned Features
+# Planned Features
 
-- [✅] Skin upload
-- [✅] Skin preview
+- [ ] Skin upload
+- [ ] Skin preview
 - [ ] Player UUID lookup
 - [ ] Skin API
-- [✅] Skin deletion
+- [ ] Skin deletion
 - [ ] Skin history
 - [ ] Cape support
-- [✅] User account
+- [ ] User accounts
+- [ ] Admin panel
 - [ ] API documentation
 
 Tech Stack
@@ -32,7 +33,7 @@ The initial version is planned to use:
 
 - Next.js — Web application and API
 - Vercel — Hosting and deployment
-- MongoDB database — Player and skin metadata
+- Database — Player and skin metadata
 - Object Storage — Skin PNG files
 
 The exact database and storage provider may change depending on the free-tier requirements.
@@ -77,24 +78,35 @@ Then open:
 
 http://localhost:3000
 
-Deployment
+# Project Status
 
-KrispySkin is intended to be deployable using Vercel's free tier.
+KrispySkin v0.7 — In Development
 
-1. Push the project to GitHub.
-2. Import the repository into Vercel.
-3. Configure the required environment variables.
-4. Deploy.
+making a mod that hook the website api
 
-Project Status
+# License
 
-KrispySkin v0.1 — In Development
+MIT License
 
-The current version is an early prototype. APIs, database structure, and client integration may change.
+Copyright (c) 2026 Coolguy
 
-License
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-License information will be added when the project structure is finalized.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 ---
 
