@@ -5,7 +5,8 @@
 
   "client": [
     "PauseMenuMixin",
-    "ScreenInvoker"
+    "ScreenInvoker",
+    "PlayerSkinMixin"
   ],
 
   "injectors": {
