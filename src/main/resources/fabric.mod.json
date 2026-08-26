@@ -9,6 +9,12 @@
   ],
   "environment": "*",
 
+  "contact": {
+    "homepage": "https://krispyskin.vercel.app",
+    "sources": "https://github.com/Coolguyhehe2515/KrispySkin",
+    "issues": "https://github.com/Coolguyhehe2515/KrispySkin/issues"
+  },
+
   "entrypoints": {
     "main": [
       "com.krispyskin.mod.KrispySkin"
