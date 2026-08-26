@@ -8,6 +8,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.Util;
+import com.krispyskin.mod.client.SessionManager;
 
 import java.net.URI;
 
@@ -147,12 +148,24 @@ public class LoginScreen extends Screen {
                                     () -> {
 
                                         if (result.success()) {
+                                            String session =
+            KrispySkinApiClient.getSessionCookie();
 
-                                            status =
-                                                    "Login successful!";
+    if (session != null
+            && !session.isEmpty()) {
 
-                                            client.setScreen(
-                                                    parent
+        SessionManager.save(
+                client.runDirectory.toPath(),
+                session
+        );
+    }
+
+    status =
+            "Login successful!";
+
+    client.setScreen(
+            parent
+    );
                                             );
 
                                         } else {
