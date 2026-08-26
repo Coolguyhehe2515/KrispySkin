@@ -16,15 +16,14 @@ Features
 
 Planned Features
 
-- [ ] Skin upload
-- [ ] Skin preview
+- [✅] Skin upload
+- [✅] Skin preview
 - [ ] Player UUID lookup
 - [ ] Skin API
-- [ ] Skin deletion
+- [✅] Skin deletion
 - [ ] Skin history
 - [ ] Cape support
-- [ ] User accounts
-- [ ] Admin panel
+- [✅] User account
 - [ ] API documentation
 
 Tech Stack
@@ -33,7 +32,7 @@ The initial version is planned to use:
 
 - Next.js — Web application and API
 - Vercel — Hosting and deployment
-- Database — Player and skin metadata
+- MongoDB database — Player and skin metadata
 - Object Storage — Skin PNG files
 
 The exact database and storage provider may change depending on the free-tier requirements.
