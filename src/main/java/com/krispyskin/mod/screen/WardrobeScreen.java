@@ -1,6 +1,6 @@
 package com.krispyskin.mod.screen;
 
-import com.krispyskin.mod.skin.KrispySkinTextureManager;
+import com.krispyskin.mod.client.KrispySkinTextureManager;
 import com.krispyskin.mod.skin.SkinSelection;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
