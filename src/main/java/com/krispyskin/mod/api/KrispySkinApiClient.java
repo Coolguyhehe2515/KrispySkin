@@ -4,8 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.krispyskin.mod.client.SessionManager;
-import net.minecraft.client.MinecraftClient;
 
 import java.io.IOException;
 import java.net.URI;
@@ -20,18 +18,12 @@ public final class KrispySkinApiClient {
     private static final String BASE_URL =
             "https://krispy-skin.vercel.app";
 
-    private static final String SESSION_COOKIE_NAME =
-            "krispy_skin_session";
-
     private static final HttpClient HTTP =
             HttpClient.newBuilder()
-                    .followRedirects(
-                            HttpClient.Redirect.NORMAL
-                    )
+                    .followRedirects(HttpClient.Redirect.NORMAL)
                     .build();
 
-    private static final Gson GSON =
-            new Gson();
+    private static final Gson GSON = new Gson();
 
     private static String sessionCookie;
 
@@ -47,19 +39,11 @@ public final class KrispySkinApiClient {
         return sessionCookie;
     }
 
-    public static void restoreSession(
+    public static void setSessionCookie(
             String session
     ) {
         if (session == null
                 || session.isEmpty()) {
-
-            sessionCookie = null;
-            return;
-        }
-
-        if (!session.startsWith(
-                SESSION_COOKIE_NAME + "="
-        )) {
             sessionCookie = null;
             return;
         }
@@ -133,23 +117,31 @@ public final class KrispySkinApiClient {
                 );
             }
 
-            String session =
-                    extractSessionCookie(
-                            setCookie
-                    );
+            int semicolon =
+                    setCookie.indexOf(';');
 
-            if (session == null) {
+            if (semicolon >= 0) {
+                setCookie =
+                        setCookie.substring(
+                                0,
+                                semicolon
+                        );
+            }
+
+            /*
+             * Make sure this is the KrispySkin session cookie.
+             */
+            if (!setCookie.startsWith(
+                    "krispy_skin_session="
+            )) {
                 return new LoginResult(
                         false,
                         null,
-                        "Server did not return " +
-                        SESSION_COOKIE_NAME
+                        "Invalid session cookie"
                 );
             }
 
-            sessionCookie = session;
-
-            saveSession();
+            sessionCookie = setCookie;
 
             JsonObject json =
                     JsonParser.parseString(
@@ -222,11 +214,6 @@ public final class KrispySkinApiClient {
                     );
 
             if (response.statusCode() != 200) {
-
-                if (response.statusCode() == 401) {
-                    clearSession();
-                }
-
                 return new LibraryResult(
                         false,
                         new ArrayList<>(),
@@ -249,9 +236,7 @@ public final class KrispySkinApiClient {
                     && json.get("skins").isJsonArray()) {
 
                 JsonArray array =
-                        json.getAsJsonArray(
-                                "skins"
-                        );
+                        json.getAsJsonArray("skins");
 
                 for (int i = 0;
                      i < array.size();
@@ -341,7 +326,6 @@ public final class KrispySkinApiClient {
 
         if (skinId == null
                 || skinId.isEmpty()) {
-
             return new LoadSkinResult(
                     false,
                     null,
@@ -371,10 +355,9 @@ public final class KrispySkinApiClient {
                                     "application/json"
                             )
                             .POST(
-                                    HttpRequest.BodyPublishers
-                                            .ofString(
-                                                    GSON.toJson(body)
-                                            )
+                                    HttpRequest.BodyPublishers.ofString(
+                                            GSON.toJson(body)
+                                    )
                             );
 
             addSessionCookie(builder);
@@ -386,11 +369,6 @@ public final class KrispySkinApiClient {
                     );
 
             if (response.statusCode() != 200) {
-
-                if (response.statusCode() == 401) {
-                    clearSession();
-                }
-
                 return new LoadSkinResult(
                         false,
                         null,
@@ -407,8 +385,6 @@ public final class KrispySkinApiClient {
 
             String activeSkin =
                     json.has("activeSkin")
-                            && !json.get("activeSkin")
-                                    .isJsonNull()
                             ? json.get("activeSkin")
                                     .getAsString()
                             : skinId;
@@ -434,13 +410,12 @@ public final class KrispySkinApiClient {
 
         if (skinId == null
                 || skinId.isEmpty()) {
-
             throw new IOException(
                     "Skin ID is empty"
             );
         }
 
-        HttpRequest.Builder builder =
+        HttpRequest request =
                 HttpRequest.newBuilder()
                         .uri(
                                 URI.create(
@@ -449,17 +424,13 @@ public final class KrispySkinApiClient {
                                         skinId
                                 )
                         )
-                        .GET();
-
-        if (isLoggedIn()) {
-            addSessionCookie(builder);
-        }
+                        .GET()
+                        .build();
 
         HttpResponse<byte[]> response =
                 HTTP.send(
-                        builder.build(),
-                        HttpResponse.BodyHandlers
-                                .ofByteArray()
+                        request,
+                        HttpResponse.BodyHandlers.ofByteArray()
                 );
 
         if (response.statusCode() != 200) {
@@ -473,82 +444,7 @@ public final class KrispySkinApiClient {
     }
 
     public static void logout() {
-        clearSession();
-    }
-
-    private static void clearSession() {
         sessionCookie = null;
-
-        try {
-            MinecraftClient client =
-                    MinecraftClient.getInstance();
-
-            if (client != null) {
-                SessionManager.clear(
-                        client.runDirectory.toPath()
-                );
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static void saveSession() {
-        try {
-            MinecraftClient client =
-                    MinecraftClient.getInstance();
-
-            if (client != null
-                    && sessionCookie != null) {
-
-                SessionManager.save(
-                        client.runDirectory.toPath(),
-                        sessionCookie
-                );
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static String extractSessionCookie(
-            String setCookie
-    ) {
-        String prefix =
-                SESSION_COOKIE_NAME + "=";
-
-        int start =
-                setCookie.indexOf(prefix);
-
-        if (start < 0) {
-            return null;
-        }
-
-        start += prefix.length();
-
-        int end =
-                setCookie.indexOf(
-                        ';',
-                        start
-                );
-
-        if (end < 0) {
-            end = setCookie.length();
-        }
-
-        String value =
-                setCookie.substring(
-                        start,
-                        end
-                ).trim();
-
-        if (value.isEmpty()) {
-            return null;
-        }
-
-        return prefix + value;
     }
 
     private static void addSessionCookie(
@@ -570,7 +466,6 @@ public final class KrispySkinApiClient {
     ) {
         if (!object.has(key)
                 || object.get(key).isJsonNull()) {
-
             return null;
         }
 
@@ -586,16 +481,12 @@ public final class KrispySkinApiClient {
                             response
                     ).getAsJsonObject();
 
-            if (json.has("error")
-                    && !json.get("error").isJsonNull()) {
-
+            if (json.has("error")) {
                 return json.get("error")
                         .getAsString();
             }
 
-            if (json.has("message")
-                    && !json.get("message").isJsonNull()) {
-
+            if (json.has("message")) {
                 return json.get("message")
                         .getAsString();
             }
@@ -642,4 +533,4 @@ public final class KrispySkinApiClient {
             String error
     ) {
     }
-    }
+}
