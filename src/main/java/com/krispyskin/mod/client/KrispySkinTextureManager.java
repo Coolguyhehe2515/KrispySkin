@@ -2,7 +2,6 @@ package com.krispyskin.mod.client;
 
 import com.krispyskin.mod.api.KrispySkinApiClient;
 import com.krispyskin.mod.skin.SkinSelection;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
@@ -43,22 +42,17 @@ public final class KrispySkinTextureManager {
     }
 
     public static void loadSelectedSkin() {
-        String skinId =
-                SkinSelection.getSelectedSkinId();
+        String skinId = SkinSelection.getSelectedSkinId();
 
-        if (skinId == null
-                || skinId.isEmpty()) {
+        if (skinId == null || skinId.isEmpty()) {
             return;
         }
 
         loadSkin(skinId);
     }
 
-    public static void loadSkin(
-            String skinId
-    ) {
-        if (skinId == null
-                || skinId.isEmpty()) {
+    public static void loadSkin(String skinId) {
+        if (skinId == null || skinId.isEmpty()) {
             return;
         }
 
@@ -74,47 +68,37 @@ public final class KrispySkinTextureManager {
         loading = true;
 
         CompletableFuture
-                .supplyAsync(
-                        () -> {
-                            try {
-                                return KrispySkinApiClient
-                                        .downloadSkin(
-                                                skinId
-                                        );
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-                )
-                .thenAccept(
-                        bytes -> {
-                            MinecraftClient client =
-                                    MinecraftClient
-                                            .getInstance();
+                .supplyAsync(() -> {
+                    try {
+                        return KrispySkinApiClient.downloadSkin(
+                                skinId
+                        );
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .thenAccept(bytes -> {
+                    MinecraftClient client =
+                            MinecraftClient.getInstance();
 
-                            client.execute(
-                                    () -> {
-                                        try {
-                                            applyTexture(
-                                                    client,
-                                                    skinId,
-                                                    bytes
-                                            );
-                                        } catch (Exception e) {
-                                            e.printStackTrace();
-                                            loading = false;
-                                        }
-                                    }
+                    client.execute(() -> {
+                        try {
+                            applyTexture(
+                                    client,
+                                    skinId,
+                                    bytes
                             );
-                        }
-                )
-                .exceptionally(
-                        throwable -> {
-                            throwable.printStackTrace();
+                        } catch (Exception e) {
+                            e.printStackTrace();
                             loading = false;
-                            return null;
                         }
-                );
+                    });
+                })
+                .exceptionally(throwable -> {
+                    throwable.printStackTrace();
+                    loading = false;
+                    return null;
+                });
     }
 
     private static void applyTexture(
@@ -125,9 +109,7 @@ public final class KrispySkinTextureManager {
 
         NativeImage image =
                 NativeImage.read(
-                        new ByteArrayInputStream(
-                                bytes
-                        )
+                        new ByteArrayInputStream(bytes)
                 );
 
         if (texture != null) {
@@ -135,9 +117,7 @@ public final class KrispySkinTextureManager {
         }
 
         texture =
-                new NativeImageBackedTexture(
-                        image
-                );
+                new NativeImageBackedTexture(image);
 
         activeTexture =
                 new Identifier(
@@ -151,9 +131,7 @@ public final class KrispySkinTextureManager {
                         texture
                 );
 
-        loadedSkinId =
-                skinId;
-
+        loadedSkinId = skinId;
         loading = false;
     }
 
@@ -163,9 +141,7 @@ public final class KrispySkinTextureManager {
 
         if (activeTexture != null) {
             client.getTextureManager()
-                    .destroyTexture(
-                            activeTexture
-                    );
+                    .destroyTexture(activeTexture);
         }
 
         if (texture != null) {
