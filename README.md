@@ -16,15 +16,13 @@ Features
 
 # Planned Features
 
-- [ ] Skin upload
-- [ ] Skin preview
-- [ ] Player UUID lookup
-- [ ] Skin API
-- [ ] Skin deletion
+- [x] Skin upload
+- [x] Skin preview
+- [x] Skin API
+- [x] Skin deletion
 - [ ] Skin history
 - [ ] Cape support
-- [ ] User accounts
-- [ ] Admin panel
+- [x] User accounts
 - [ ] API documentation
 
 Tech Stack
