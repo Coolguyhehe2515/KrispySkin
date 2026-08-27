@@ -1,6 +1,7 @@
 package com.krispyskin.mod.screen;
 
 import com.krispyskin.mod.api.KrispySkinApiClient;
+import com.krispyskin.mod.client.SessionManager;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -8,7 +9,6 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.Util;
-import com.krispyskin.mod.client.SessionManager;
 
 import java.net.URI;
 
@@ -59,6 +59,7 @@ public class LoginScreen extends Screen {
                 );
 
         passwordField.setMaxLength(128);
+
         passwordField.setRenderTextProvider(
                 (text, firstLine) ->
                         Text.literal(
@@ -129,7 +130,8 @@ public class LoginScreen extends Screen {
             return;
         }
 
-        status = "Logging in...";
+        status =
+                "Logging in...";
 
         Thread thread =
                 new Thread(
@@ -148,24 +150,26 @@ public class LoginScreen extends Screen {
                                     () -> {
 
                                         if (result.success()) {
+
                                             String session =
-            KrispySkinApiClient.getSessionCookie();
+                                                    KrispySkinApiClient
+                                                            .getSessionCookie();
 
-    if (session != null
-            && !session.isEmpty()) {
+                                            if (session != null
+                                                    && !session.isEmpty()) {
 
-        SessionManager.save(
-                client.runDirectory.toPath(),
-                session
-        );
-    }
+                                                SessionManager.save(
+                                                        client.runDirectory
+                                                                .toPath(),
+                                                        session
+                                                );
+                                            }
 
-    status =
-            "Login successful!";
+                                            status =
+                                                    "Login successful!";
 
-    client.setScreen(
-            parent
-    );
+                                            client.setScreen(
+                                                    parent
                                             );
 
                                         } else {
@@ -189,6 +193,7 @@ public class LoginScreen extends Screen {
 
     private void openWebsite() {
         try {
+
             Util.getOperatingSystem()
                     .open(
                             URI.create(
@@ -231,13 +236,16 @@ public class LoginScreen extends Screen {
                 0xFFAAAAAA
         );
 
-        context.drawCenteredTextWithShadow(
-                this.textRenderer,
-                Text.literal(status),
-                centerX,
-                245,
-                0xFFFFFFFF
-        );
+        if (!status.isEmpty()) {
+
+            context.drawCenteredTextWithShadow(
+                    this.textRenderer,
+                    Text.literal(status),
+                    centerX,
+                    245,
+                    0xFFFFFFFF
+            );
+        }
 
         super.render(
                 context,
